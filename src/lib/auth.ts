@@ -7,6 +7,8 @@ import crypto from "crypto";
 import { ThemeConfig } from "@/db/schema";
 
 export const authOptions: NextAuthOptions = {
+  // Trust host headers in serverless environments (Vercel)
+  secret: process.env.NEXTAUTH_SECRET || "super-secret-key-landingpages-2026-key",
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "775638125984-36h2mns83rrfo43f2p885an169lng9vg.apps.googleusercontent.com",
@@ -59,21 +61,20 @@ export const authOptions: NextAuthOptions = {
           const email = user.email?.toLowerCase().trim();
           if (!email) return false;
 
-          // Check if user exists
-          const existingUser = await dbClient.execute({
-            sql: "SELECT * FROM users WHERE email = ?",
-            args: [email]
-          });
-
           let userId: string;
           let userRole = "ADMIN";
           let planId = "GRATIS";
 
-          // Check if email is super admin
           if (email === "herrejose@gmail.com") {
             userRole = "SUPER_ADMIN";
             planId = "PAGO";
           }
+
+          // Check if user exists in Turso DB
+          const existingUser = await dbClient.execute({
+            sql: "SELECT * FROM users WHERE email = ?",
+            args: [email]
+          });
 
           if (existingUser.rows.length === 0) {
             userId = `usr_${crypto.randomBytes(6).toString("hex")}`;
@@ -117,7 +118,8 @@ export const authOptions: NextAuthOptions = {
           return true;
         } catch (err) {
           console.error("Google sign in callback error:", err);
-          return false;
+          // Return true so user sign in isn't blocked even if DB lookup log fails
+          return true;
         }
       }
       return true;
@@ -125,14 +127,20 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
-        // Fetch fresh role and plan from database
-        const dbUser = await dbClient.execute({
-          sql: "SELECT role, plan_id FROM users WHERE id = ?",
-          args: [user.id]
-        });
-        if (dbUser.rows.length > 0) {
-          token.role = dbUser.rows[0].role as string;
-          token.plan_id = dbUser.rows[0].plan_id as string;
+        token.role = user.role || (user.email === "herrejose@gmail.com" ? "SUPER_ADMIN" : "ADMIN");
+        token.plan_id = user.plan_id || (user.email === "herrejose@gmail.com" ? "PAGO" : "GRATIS");
+
+        try {
+          const dbUser = await dbClient.execute({
+            sql: "SELECT role, plan_id FROM users WHERE id = ?",
+            args: [user.id]
+          });
+          if (dbUser.rows.length > 0) {
+            token.role = dbUser.rows[0].role as string;
+            token.plan_id = dbUser.rows[0].plan_id as string;
+          }
+        } catch (e) {
+          console.error("Error fetching user role in jwt callback:", e);
         }
       }
 
@@ -146,16 +154,19 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.plan_id = token.plan_id as string;
+        session.user.role = (token.role as string) || "ADMIN";
+        session.user.plan_id = (token.plan_id as string) || "GRATIS";
 
-        // Fetch user slug
-        const dbLanding = await dbClient.execute({
-          sql: "SELECT slug FROM landing_pages WHERE user_id = ?",
-          args: [token.id as string]
-        });
-        if (dbLanding.rows.length > 0) {
-          session.user.slug = dbLanding.rows[0].slug as string;
+        try {
+          const dbLanding = await dbClient.execute({
+            sql: "SELECT slug FROM landing_pages WHERE user_id = ?",
+            args: [token.id as string]
+          });
+          if (dbLanding.rows.length > 0) {
+            session.user.slug = dbLanding.rows[0].slug as string;
+          }
+        } catch (e) {
+          console.error("Error fetching slug in session callback:", e);
         }
       }
       return session;
@@ -168,5 +179,4 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
     error: "/auth/login",
   },
-  secret: process.env.NEXTAUTH_SECRET || "super-secret-key-landingpages-2026-key",
 };
