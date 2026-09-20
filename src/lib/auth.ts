@@ -7,7 +7,6 @@ import crypto from "crypto";
 import { ThemeConfig } from "@/db/schema";
 
 export const authOptions: NextAuthOptions = {
-  // Trust host headers in serverless environments (Vercel)
   secret: process.env.NEXTAUTH_SECRET || "super-secret-key-landingpages-2026-key",
   providers: [
     GoogleProvider({
@@ -55,11 +54,11 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         try {
           const email = user.email?.toLowerCase().trim();
-          if (!email) return false;
+          if (!email) return true;
 
           let userId: string;
           let userRole = "ADMIN";
@@ -107,18 +106,15 @@ export const authOptions: NextAuthOptions = {
             });
           } else {
             userId = existingUser.rows[0].id as string;
-            // Update Google ID if missing
             await dbClient.execute({
               sql: "UPDATE users SET google_id = ? WHERE id = ?",
               args: [account.providerAccountId, userId]
             });
           }
 
-          user.id = userId;
           return true;
         } catch (err) {
           console.error("Google sign in callback error:", err);
-          // Return true so user sign in isn't blocked even if DB lookup log fails
           return true;
         }
       }
@@ -126,21 +122,29 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role || (user.email === "herrejose@gmail.com" ? "SUPER_ADMIN" : "ADMIN");
-        token.plan_id = user.plan_id || (user.email === "herrejose@gmail.com" ? "PAGO" : "GRATIS");
+        const userEmail = (user.email || token.email || "").toLowerCase().trim();
+        token.role = userEmail === "herrejose@gmail.com" ? "SUPER_ADMIN" : "ADMIN";
+        token.plan_id = userEmail === "herrejose@gmail.com" ? "PAGO" : "GRATIS";
 
         try {
-          const dbUser = await dbClient.execute({
-            sql: "SELECT role, plan_id FROM users WHERE id = ?",
-            args: [user.id]
-          });
-          if (dbUser.rows.length > 0) {
-            token.role = dbUser.rows[0].role as string;
-            token.plan_id = dbUser.rows[0].plan_id as string;
+          if (userEmail) {
+            const dbUser = await dbClient.execute({
+              sql: "SELECT id, role, plan_id FROM users WHERE email = ?",
+              args: [userEmail]
+            });
+            if (dbUser.rows.length > 0) {
+              token.id = dbUser.rows[0].id as string;
+              token.role = dbUser.rows[0].role as string;
+              token.plan_id = dbUser.rows[0].plan_id as string;
+            } else {
+              token.id = user.id;
+            }
+          } else {
+            token.id = user.id;
           }
         } catch (e) {
-          console.error("Error fetching user role in jwt callback:", e);
+          console.error("Error in jwt callback:", e);
+          token.id = user.id;
         }
       }
 
@@ -153,17 +157,19 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
+        session.user.id = (token.id as string) || "";
         session.user.role = (token.role as string) || "ADMIN";
         session.user.plan_id = (token.plan_id as string) || "GRATIS";
 
         try {
-          const dbLanding = await dbClient.execute({
-            sql: "SELECT slug FROM landing_pages WHERE user_id = ?",
-            args: [token.id as string]
-          });
-          if (dbLanding.rows.length > 0) {
-            session.user.slug = dbLanding.rows[0].slug as string;
+          if (token.id) {
+            const dbLanding = await dbClient.execute({
+              sql: "SELECT slug FROM landing_pages WHERE user_id = ?",
+              args: [token.id as string]
+            });
+            if (dbLanding.rows.length > 0) {
+              session.user.slug = dbLanding.rows[0].slug as string;
+            }
           }
         } catch (e) {
           console.error("Error fetching slug in session callback:", e);
