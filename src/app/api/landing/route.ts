@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { dbClient } from "@/db";
+import { dbClient, ensurePaymentColumns } from "@/db";
 
 // GET user landing page and links
 export async function GET(req: Request) {
   try {
+    await ensurePaymentColumns();
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -265,5 +266,51 @@ export async function PUT(req: Request) {
   } catch (error: any) {
     console.error("PUT landing error:", error);
     return NextResponse.json({ error: error?.message || "Error al actualizar" }, { status: 500 });
+  }
+}
+
+// DELETE user landing page
+export async function DELETE(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "El ID del perfil a eliminar es requerido." }, { status: 400 });
+    }
+
+    // Obtener landings del usuario ordenadas por fecha
+    const userLandings = await dbClient.execute({
+      sql: "SELECT id FROM landing_pages WHERE user_id = ? ORDER BY created_at ASC",
+      args: [userId]
+    });
+
+    if (userLandings.rows.length === 0) {
+      return NextResponse.json({ error: "No se encontraron perfiles." }, { status: 404 });
+    }
+
+    // Verificar si es el perfil principal (el primero creado)
+    if (userLandings.rows[0].id === id) {
+      return NextResponse.json({ 
+        error: "No es posible eliminar el perfil principal de tu cuenta. Solo puedes eliminar los perfiles adicionales." 
+      }, { status: 400 });
+    }
+
+    // Eliminar perfil (los links se eliminan por CASCADE)
+    await dbClient.execute({
+      sql: "DELETE FROM landing_pages WHERE id = ? AND user_id = ?",
+      args: [id, userId]
+    });
+
+    return NextResponse.json({ success: true, message: "Perfil eliminado correctamente" });
+  } catch (error: any) {
+    console.error("DELETE landing error:", error);
+    return NextResponse.json({ error: error?.message || "Error al eliminar perfil" }, { status: 500 });
   }
 }

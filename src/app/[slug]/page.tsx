@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { dbClient } from "@/db";
 import { ThemeConfig, LinkItem } from "@/db/schema";
 import { SocialIcon } from "@/components/SocialIcons";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
 
 interface PublicLandingProps {
@@ -16,7 +16,7 @@ interface PublicLandingProps {
 export async function generateMetadata({ params }: PublicLandingProps): Promise<Metadata> {
   const { slug } = await params;
   const res = await dbClient.execute({
-    sql: "SELECT title, bio, avatar_url FROM landing_pages WHERE slug = ?",
+    sql: "SELECT title, bio, avatar_url, is_disabled FROM landing_pages WHERE slug = ?",
     args: [slug.toLowerCase().trim()]
   });
 
@@ -27,6 +27,13 @@ export async function generateMetadata({ params }: PublicLandingProps): Promise<
   }
 
   const landing = res.rows[0];
+  if (landing.is_disabled) {
+    return {
+      title: "Perfil Deshabilitado | LinkBio VE",
+      description: "Esta página ha sido deshabilitada por la administración."
+    };
+  }
+
   return {
     title: `${landing.title} | Enlaces Oficiales`,
     description: (landing.bio as string) || "Visita mi página de enlaces oficiales en LinkBio VE.",
@@ -53,6 +60,55 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
   }
 
   const landingRow = landingRes.rows[0];
+
+  // If disabled by admin, render warning screen with justification
+  if (landingRow.is_disabled === 1 || Boolean(landingRow.is_disabled)) {
+    const disabledReason = (landingRow.disabled_reason as string) || "Este perfil ha sido deshabilitado por el equipo de administración.";
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-rose-950/20 to-slate-950 z-0" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <main className="w-full max-w-md mx-auto relative z-10 glass-panel border border-rose-500/30 p-8 rounded-3xl text-center shadow-2xl space-y-6 backdrop-blur-xl bg-slate-900/80">
+          <div className="w-20 h-20 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 mx-auto flex items-center justify-center shadow-lg shadow-rose-500/10 animate-pulse">
+            <ShieldAlert className="w-10 h-10" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-black uppercase tracking-wider">
+              Perfil Deshabilitado
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight pt-2">
+              Página No Disponible
+            </h1>
+            <p className="text-xs text-slate-400">
+              Esta página de enlaces ha sido temporalmente deshabilitada por la administración de LinkBio VE.
+            </p>
+          </div>
+
+          <div className="bg-slate-950/80 border border-rose-500/20 rounded-2xl p-4 text-left space-y-1.5">
+            <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider block">
+              ⚠️ Motivo de la medida:
+            </span>
+            <p className="text-xs font-medium text-slate-200 leading-relaxed italic">
+              "{disabledReason}"
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <a
+              href="/"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30"
+            >
+              <Sparkles className="w-4 h-4" /> Ir a la Página Principal
+            </a>
+          </div>
+        </main>
+      </div>
+    );
+  }
   const themeConfig: ThemeConfig = JSON.parse(landingRow.theme_config_json as string);
 
   // 2. Fetch User & User Plan Features

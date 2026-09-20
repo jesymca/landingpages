@@ -105,17 +105,22 @@ export default function AdminDashboardPage() {
   const [ticketCode, setTicketCode] = useState("");
   const [redeemingTicket, setRedeemingTicket] = useState(false);
 
+  // Profile Deletion Modal state
+  const [isDeleteLandingModalOpen, setIsDeleteLandingModalOpen] = useState(false);
+  const [isDeletingLanding, setIsDeletingLanding] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/login");
     }
   }, [status, router]);
 
-  const loadData = async () => {
+  const loadData = async (targetLandingId?: string) => {
     try {
       setLoading(true);
+      const landingUrl = targetLandingId ? `/api/landing?id=${targetLandingId}` : "/api/landing";
       const [resLanding, resBcv, resMethods, resBanks, resUserPayments, resDiscounts] = await Promise.all([
-        fetch("/api/landing"),
+        fetch(landingUrl),
         fetch("/api/bcv"),
         fetch("/api/super-admin/payment-methods"),
         fetch("/api/banks"),
@@ -225,7 +230,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Create new landing page
+  // Create new landing page and auto-switch to it
   const handleCreateLanding = async () => {
     setCreatingLanding(true);
     try {
@@ -239,12 +244,37 @@ export default function AdminDashboardPage() {
         showToast(`❌ ${data.error || "Error al crear perfil"}`);
       } else {
         showToast("✅ Perfil creado con éxito");
-        loadData(); // reload all data
+        // Automatically switch to the newly created profile!
+        await loadData(data.id);
       }
     } catch (err: any) {
       showToast("❌ Error al crear perfil");
     } finally {
       setCreatingLanding(false);
+    }
+  };
+
+  // Confirm delete active non-primary landing page
+  const handleConfirmDeleteLanding = async () => {
+    if (!landingId) return;
+    setIsDeletingLanding(true);
+    try {
+      const res = await fetch(`/api/landing?id=${landingId}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error || "Error al eliminar perfil"}`);
+      } else {
+        showToast("🗑️ Perfil eliminado con éxito");
+        setIsDeleteLandingModalOpen(false);
+        const primaryId = landings.find(l => l.id !== landingId)?.id;
+        await loadData(primaryId);
+      }
+    } catch (err) {
+      showToast("❌ Error al eliminar perfil");
+    } finally {
+      setIsDeletingLanding(false);
     }
   };
 
@@ -261,8 +291,6 @@ export default function AdminDashboardPage() {
       if (selected.theme_config_json) {
         setThemeConfig(selected.theme_config_json);
       }
-      // Re-fetch links for the selected landing page using loadData or fetch just links
-      // Alternatively, we can just loadData to refresh everything
     }
   };
 
@@ -664,22 +692,36 @@ export default function AdminDashboardPage() {
 
           {/* Profile Switcher */}
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-between bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
               <span className="text-xs font-semibold text-slate-400 whitespace-nowrap">Perfil Activo:</span>
               <select
                 value={landingId}
                 onChange={(e) => handleSwitchLanding(e.target.value)}
                 className="bg-slate-950 border border-slate-700 text-white text-sm rounded-xl px-3 py-2 w-full sm:w-auto outline-none"
               >
-                {landings.map(l => (
-                  <option key={l.id} value={l.id}>{l.title || l.slug}</option>
+                {landings.map((l, idx) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title || l.slug} {idx === 0 ? "(Principal)" : ""}
+                  </option>
                 ))}
               </select>
+
+              {/* Show Delete button ONLY for non-primary profiles */}
+              {landings.length > 1 && landings[0]?.id !== landingId && (
+                <button
+                  onClick={() => setIsDeleteLandingModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition-all"
+                  title="Eliminar Perfil Seleccionado"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Eliminar Perfil</span>
+                </button>
+              )}
             </div>
             <button
               onClick={handleCreateLanding}
               disabled={creatingLanding}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all border border-slate-700 w-full sm:w-auto"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all border border-slate-700 w-full sm:w-auto shrink-0"
             >
               <Plus className="w-4 h-4" />
               {creatingLanding ? "Creando..." : "Crear Nuevo Perfil"}
@@ -1568,6 +1610,43 @@ export default function AdminDashboardPage() {
         userPlan={userData?.plan_id || "GRATIS"}
         onRequireUpgrade={handleRequireUpgrade}
       />
+
+      {/* Delete Profile Confirmation Modal */}
+      {isDeleteLandingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl text-center">
+            <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 mx-auto flex items-center justify-center">
+              <Trash2 className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-extrabold text-white">¿Eliminar este Perfil?</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                ¿Estás seguro de que deseas eliminar permanentemente el perfil <strong className="text-rose-400">"{title}"</strong> (<span className="font-mono text-indigo-400">/{slug}</span>)?
+              </p>
+              <p className="text-[11px] text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                ⚠️ Se eliminarán todos los enlaces configurados en este perfil de forma irreversible. El perfil principal no se verá afectado.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setIsDeleteLandingModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDeleteLanding}
+                disabled={isDeletingLanding}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 transition-all"
+              >
+                {isDeletingLanding ? "Eliminando..." : "Sí, Eliminar Perfil"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

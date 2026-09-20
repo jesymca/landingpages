@@ -64,6 +64,8 @@ export interface LandingPage {
   background_type: 'color' | 'gradient' | 'image' | 'video';
   background_url: string;
   theme_config_json: ThemeConfig;
+  is_disabled?: number;
+  disabled_reason?: string;
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +180,8 @@ CREATE TABLE IF NOT EXISTS landing_pages (
   background_type TEXT NOT NULL DEFAULT 'color',
   background_url TEXT NOT NULL DEFAULT '#0f172a',
   theme_config_json TEXT NOT NULL,
+  is_disabled INTEGER DEFAULT 0,
+  disabled_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
