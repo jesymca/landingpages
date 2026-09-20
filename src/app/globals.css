@@ -59,3 +59,116 @@
   min-height: 100%;
   object-fit: cover;
 }
+
+/* Animated Background Gradients (PRO) */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulseGlow {
+  0% { filter: brightness(1) hue-rotate(0deg); }
+  50% { filter: brightness(1.25) hue-rotate(40deg); }
+  100% { filter: brightness(1) hue-rotate(0deg); }
+}
+
+@keyframes rainBeams {
+  0% { background-position: 0 0; }
+  100% { background-position: 600px 1200px; }
+}
+
+.bg-anim-ocean {
+  background: linear-gradient(-45deg, #0284c7, #0d9488, #0369a1, #0f172a, #1e1b4b);
+  background-size: 400% 400%;
+  animation: gradientShift 10s ease infinite;
+}
+
+.bg-anim-smoke {
+  background: radial-gradient(circle at 50% 50%, #6b21a8, #1e1b4b, #0f172a, #090d16);
+  background-size: 200% 200%;
+  animation: pulseGlow 8s ease-in-out infinite;
+}
+
+.bg-anim-rain {
+  background: radial-gradient(ellipse at top, #1e1b4b, #0f172a, #020617);
+  background-image: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.2), transparent 70%),
+                    repeating-linear-gradient(45deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 2px, transparent 0, transparent 35px);
+  animation: rainBeams 18s linear infinite;
+}
+
+.bg-anim-aurora {
+  background: linear-gradient(135deg, #059669, #0d9488, #4c1d95, #0f172a, #047857);
+  background-size: 300% 300%;
+  animation: gradientShift 12s ease-in-out infinite;
+}
+
+.bg-anim-fire {
+  background: linear-gradient(-45deg, #991b1b, #c2410c, #78350f, #0f172a, #881337);
+  background-size: 400% 400%;
+  animation: gradientShift 8s ease infinite;
+}
+
+.bg-anim-cyber {
+  background: linear-gradient(45deg, #0284c7, #c026d3, #4f46e5, #090d16);
+  background-size: 300% 300%;
+  animation: gradientShift 7s ease infinite;
+}
+
+/* Moving Light Border Buttons (PRO) */
+@keyframes rotateConic {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.btn-moving-light-container {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5px; /* light border thickness */
+  isolation: isolate;
+  transition: all 0.3s ease;
+}
+
+.btn-moving-light-container::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  z-index: 0;
+  animation: rotateConic 3s linear infinite;
+}
+
+.btn-moving-light-cyan::before {
+  background: conic-gradient(transparent, transparent, transparent, #38bdf8, #0284c7);
+}
+
+.btn-moving-light-gold::before {
+  background: conic-gradient(transparent, transparent, transparent, #f59e0b, #d97706);
+}
+
+.btn-moving-light-emerald::before {
+  background: conic-gradient(transparent, transparent, transparent, #10b981, #059669);
+}
+
+.btn-moving-light-crimson::before {
+  background: conic-gradient(transparent, transparent, transparent, #f43f5e, #e11d48);
+}
+
+.btn-moving-light-purple::before {
+  background: conic-gradient(transparent, transparent, transparent, #d946ef, #a855f7);
+}
+
+/* Neon Flicker Text Animation */
+@keyframes neonFlicker {
+  0%, 100% { text-shadow: 0 0 5px #38bdf8, 0 0 15px #38bdf8, 0 0 30px #0284c7; opacity: 1; }
+  50% { text-shadow: 0 0 2px #38bdf8, 0 0 6px #38bdf8; opacity: 0.85; }
+}
+
+.text-neon-flicker {
+  animation: neonFlicker 2.5s infinite alternate;
+}

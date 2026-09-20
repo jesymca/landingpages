@@ -1184,6 +1184,12 @@ export default function AdminDashboardPage() {
 
                       {/* Extended PRO Gradients */}
                       {[
+                        { name: "🌊 Mar en Movimiento", value: "anim_ocean", isPro: true },
+                        { name: "💨 Humo Cósmico", value: "anim_smoke", isPro: true },
+                        { name: "🌧️ Lluvia & Gotas", value: "anim_rain", isPro: true },
+                        { name: "🌌 Aurora Boreal", value: "anim_aurora", isPro: true },
+                        { name: "🔥 Fuego Vivo", value: "anim_fire", isPro: true },
+                        { name: "⚡ Cyberpunk Pulse", value: "anim_cyber", isPro: true },
                         { name: "Vaporwave Sunset", value: "from-pink-600 via-purple-700 to-indigo-900", isPro: true },
                         { name: "Cyberpunk Violet", value: "from-fuchsia-900 via-violet-950 to-slate-950", isPro: true },
                         { name: "Golden Luxury", value: "from-amber-900 via-yellow-950 to-stone-950", isPro: true },
@@ -1365,7 +1371,7 @@ export default function AdminDashboardPage() {
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Estilo de Botones
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {/* Gratis Basic Button Styles */}
                   {[
                     { key: "rounded", label: "Redondeado", isPro: false },
@@ -1385,14 +1391,18 @@ export default function AdminDashboardPage() {
                     </button>
                   ))}
 
-                  {/* PRO Extended Button Styles */}
+                  {/* PRO Extended Button Styles & Moving Lights */}
                   {[
+                    { key: "moving_light_cyan", label: "✨ Luz Cian", isPro: true },
+                    { key: "moving_light_gold", label: "✨ Luz Oro", isPro: true },
+                    { key: "moving_light_emerald", label: "✨ Luz Esmeralda", isPro: true },
+                    { key: "moving_light_crimson", label: "✨ Luz Carmesí", isPro: true },
+                    { key: "moving_light_purple", label: "✨ Luz Púrpura", isPro: true },
                     { key: "glow", label: "Brillo Neón", isPro: true },
                     { key: "shadow", label: "Sombra 3D", isPro: true },
                     { key: "square", label: "Cuadrado", isPro: true },
                     { key: "gradient_border", label: "Borde Gradiente", isPro: true },
                     { key: "cyber_neon", label: "Cyberpunk", isPro: true },
-                    { key: "minimal_flat", label: "Plano Minimal", isPro: true },
                   ].map((st) => (
                     <button
                       key={st.key}

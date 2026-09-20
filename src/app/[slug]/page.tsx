@@ -164,7 +164,14 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
       color: textCol,
     };
 
-    if (style === "outline") {
+    const isMovingLight = style.startsWith("moving_light_");
+
+    if (isMovingLight) {
+      extraStyles = {
+        backgroundColor: bg,
+        color: textCol,
+      };
+    } else if (style === "outline") {
       extraStyles = {
         backgroundColor: "transparent",
         borderColor: bg,
@@ -179,7 +186,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
         borderColor: "rgba(255, 255, 255, 0.25)",
         color: textCol,
       };
-    } else if (style === "glow") {
+    } else if (style === "glow" || style === "cyber_neon") {
       extraStyles = {
         backgroundColor: bg,
         color: textCol,
@@ -237,10 +244,10 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
       };
     }
 
-    return { radiusClass, extraStyles };
+    return { radiusClass, extraStyles, styleKey: style, isMovingLight };
   };
 
-  const { radiusClass, extraStyles } = getButtonStyle();
+  const { radiusClass, extraStyles, styleKey, isMovingLight } = getButtonStyle();
 
   // Text formatting & font style
   const getTextStyleClasses = () => {
@@ -252,11 +259,21 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
 
     const effect = themeConfig?.text_effect || "none";
     let effectClass = "";
-    if (effect === "shadow") effectClass = "drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]";
-    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(168,85,247,0.8)]";
-    if (effect === "gradient") effectClass = "bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent font-black";
+    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(56,189,248,0.9)] [text-shadow:0_0_12px_rgba(56,189,248,0.8),0_0_25px_rgba(168,85,247,0.6)]";
+    if (effect === "shadow_3d" || effect === "shadow") effectClass = "[text-shadow:2px_2px_0px_#000,4px_4px_0px_rgba(0,0,0,0.6)]";
+    if (effect === "gradient_text" || effect === "gradient") effectClass = "bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-400 bg-clip-text text-transparent font-black";
+    if (effect === "neon_flicker") effectClass = "text-neon-flicker font-black";
 
     return `${styleClass} ${effectClass}`;
+  };
+
+  const isGradientText = themeConfig?.text_effect === "gradient_text" || themeConfig?.text_effect === "gradient";
+
+  const getTextStyleObject = (defaultColor: string): React.CSSProperties => {
+    if (isGradientText) {
+      return { WebkitTextFillColor: "transparent", color: "transparent" };
+    }
+    return { color: themeConfig?.text_color || defaultColor };
   };
 
   const fontFamily = themeConfig?.font_family || "Inter";
@@ -285,6 +302,12 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     }
 
     if (backgroundType === "gradient") {
+      if (backgroundUrl && backgroundUrl.startsWith("anim_")) {
+        const animName = backgroundUrl.replace("anim_", "");
+        return (
+          <div className={`fixed inset-0 z-0 bg-anim-${animName}`} />
+        );
+      }
       if (themeConfig?.gradient_color_start && themeConfig?.gradient_color_end) {
         return (
           <div
@@ -392,8 +415,8 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
 
           {/* Title & Bio */}
           <h1
-            className={`text-2xl font-black text-white tracking-tight drop-shadow-md mb-2 ${getTextStyleClasses()}`}
-            style={{ color: themeConfig?.text_color || "#ffffff" }}
+            className={`text-2xl font-black tracking-tight drop-shadow-md mb-2 ${getTextStyleClasses()}`}
+            style={getTextStyleObject("#ffffff")}
           >
             {landingRow.title as string}
           </h1>
@@ -401,7 +424,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
           {landingRow.bio && (
             <p
               className={`text-sm leading-relaxed max-w-sm mx-auto mb-4 opacity-90 drop-shadow-sm ${getTextStyleClasses()}`}
-              style={{ color: themeConfig?.text_color || "#e2e8f0" }}
+              style={getTextStyleObject("#e2e8f0")}
             >
               {landingRow.bio as string}
             </p>
@@ -412,22 +435,45 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
 
           {/* Links List */}
           <div className="space-y-4 mt-6">
-            {links.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={extraStyles}
-                className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} border border-white/10`}
-              >
-                <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                  <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
-                </div>
-                <span className="truncate w-full text-center px-2">{link.title}</span>
-                <div className="w-6 h-6 shrink-0" />
-              </a>
-            ))}
+            {links.map((link) => {
+              if (isMovingLight) {
+                const colorClass = `btn-${styleKey.replace('_', '-')}`;
+                return (
+                  <div key={link.id} className={`btn-moving-light-container ${colorClass} ${radiusClass} w-full`}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={extraStyles}
+                      className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} relative z-10`}
+                    >
+                      <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                        <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
+                      </div>
+                      <span className="truncate w-full text-center px-2">{link.title}</span>
+                      <div className="w-6 h-6 shrink-0" />
+                    </a>
+                  </div>
+                );
+              }
+
+              return (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={extraStyles}
+                  className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} border border-white/10`}
+                >
+                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                    <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
+                  </div>
+                  <span className="truncate w-full text-center px-2">{link.title}</span>
+                  <div className="w-6 h-6 shrink-0" />
+                </a>
+              );
+            })}
           </div>
         </div>
 

@@ -42,7 +42,14 @@ export function PhonePreview({
       color: textCol,
     };
 
-    if (style === "outline") {
+    const isMovingLight = style.startsWith("moving_light_");
+
+    if (isMovingLight) {
+      extraStyles = {
+        backgroundColor: bg,
+        color: textCol,
+      };
+    } else if (style === "outline") {
       extraStyles = {
         backgroundColor: "transparent",
         borderColor: bg,
@@ -57,7 +64,7 @@ export function PhonePreview({
         borderColor: "rgba(255, 255, 255, 0.25)",
         color: textCol,
       };
-    } else if (style === "glow") {
+    } else if (style === "glow" || style === "cyber_neon") {
       extraStyles = {
         backgroundColor: bg,
         color: textCol,
@@ -115,10 +122,10 @@ export function PhonePreview({
       };
     }
 
-    return { radiusClass, extraStyles };
+    return { radiusClass, extraStyles, styleKey: style, isMovingLight };
   };
 
-  const { radiusClass, extraStyles } = getButtonStyle();
+  const { radiusClass, extraStyles, styleKey, isMovingLight } = getButtonStyle();
 
   // Text Style & Font generator
   const getTextStyleClasses = () => {
@@ -130,11 +137,21 @@ export function PhonePreview({
 
     const effect = themeConfig?.text_effect || "none";
     let effectClass = "";
-    if (effect === "shadow") effectClass = "drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]";
-    if (effect === "glow") effectClass = "drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]";
-    if (effect === "gradient") effectClass = "bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent font-black";
+    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(56,189,248,0.9)] [text-shadow:0_0_12px_rgba(56,189,248,0.8),0_0_25px_rgba(168,85,247,0.6)]";
+    if (effect === "shadow_3d" || effect === "shadow") effectClass = "[text-shadow:2px_2px_0px_#000,4px_4px_0px_rgba(0,0,0,0.6)]";
+    if (effect === "gradient_text" || effect === "gradient") effectClass = "bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-400 bg-clip-text text-transparent font-black";
+    if (effect === "neon_flicker") effectClass = "text-neon-flicker font-black";
 
     return `${styleClass} ${effectClass}`;
+  };
+
+  const isGradientText = themeConfig?.text_effect === "gradient_text" || themeConfig?.text_effect === "gradient";
+
+  const getTextStyleObject = (defaultColor: string): React.CSSProperties => {
+    if (isGradientText) {
+      return { WebkitTextFillColor: "transparent", color: "transparent" };
+    }
+    return { color: themeConfig?.text_color || defaultColor };
   };
 
   const fontFamily = themeConfig?.font_family || "Inter";
@@ -194,6 +211,12 @@ export function PhonePreview({
     }
 
     if (backgroundType === "gradient") {
+      if (backgroundUrl && backgroundUrl.startsWith("anim_")) {
+        const animName = backgroundUrl.replace("anim_", "");
+        return (
+          <div className={`absolute inset-0 z-0 bg-anim-${animName}`} />
+        );
+      }
       if (themeConfig?.gradient_color_start && themeConfig?.gradient_color_end) {
         return (
           <div
@@ -270,14 +293,14 @@ export function PhonePreview({
 
           {/* Title & Bio */}
           <h2
-            className={`text-lg font-extrabold text-white tracking-tight drop-shadow-sm mb-1 ${getTextStyleClasses()}`}
-            style={{ color: themeConfig?.text_color || "#ffffff" }}
+            className={`text-lg font-extrabold tracking-tight drop-shadow-sm mb-1 ${getTextStyleClasses()}`}
+            style={getTextStyleObject("#ffffff")}
           >
             {title || "Nombre de Usuario"}
           </h2>
           <p
-            className={`text-xs text-slate-300 leading-relaxed mb-4 max-w-xs mx-auto drop-shadow-sm opacity-90 ${getTextStyleClasses()}`}
-            style={{ color: themeConfig?.text_color || "#cbd5e1" }}
+            className={`text-xs leading-relaxed mb-4 max-w-xs mx-auto drop-shadow-sm opacity-90 ${getTextStyleClasses()}`}
+            style={getTextStyleObject("#cbd5e1")}
           >
             {bio || "Biografía corta y descripción de enlaces."}
           </p>
@@ -290,22 +313,45 @@ export function PhonePreview({
             {links && links.filter(l => l.is_active).length > 0 ? (
               links
                 .filter(l => l.is_active)
-                .map((link) => (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={extraStyles}
-                    className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} shadow-md`}
-                  >
-                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                      <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
-                    </div>
-                    <span className="truncate w-full text-center px-2">{link.title}</span>
-                    <div className="w-5 h-5 shrink-0" />
-                  </a>
-                ))
+                .map((link) => {
+                  if (isMovingLight) {
+                    const colorClass = `btn-${styleKey.replace('_', '-')}`;
+                    return (
+                      <div key={link.id} className={`btn-moving-light-container ${colorClass} ${radiusClass} w-full`}>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={extraStyles}
+                          className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} relative z-10`}
+                        >
+                          <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                            <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
+                          </div>
+                          <span className="truncate w-full text-center px-2">{link.title}</span>
+                          <div className="w-5 h-5 shrink-0" />
+                        </a>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={extraStyles}
+                      className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} shadow-md`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                        <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
+                      </div>
+                      <span className="truncate w-full text-center px-2">{link.title}</span>
+                      <div className="w-5 h-5 shrink-0" />
+                    </a>
+                  );
+                })
             ) : (
               <div className="p-4 rounded-xl bg-black/20 text-slate-400 text-xs border border-white/10">
                 Añade tus primeros enlaces en el panel izquierdo
