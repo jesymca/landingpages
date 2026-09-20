@@ -39,3 +39,14 @@ export async function executeQuery(sql: string, args: any[] = []) {
     throw error;
   }
 }
+
+export async function ensurePaymentColumns() {
+  try {
+    const client = getClient();
+    await client.execute("ALTER TABLE payments ADD COLUMN proof_url TEXT").catch(() => {});
+    await client.execute("ALTER TABLE payments ADD COLUMN months_paid INTEGER DEFAULT 1").catch(() => {});
+  } catch (err) {
+    // Ignore errors if columns already exist
+  }
+}
+

@@ -87,9 +87,13 @@ export default function AdminDashboardPage() {
   const [payerIdNumber, setPayerIdNumber] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
 
-  // File upload state
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
+  // Multi-month and Payment Proof Upload State
+  const [monthsPaid, setMonthsPaid] = useState<number>(1);
+  const [proofUrl, setProofUrl] = useState<string>("");
+  const [uploadingProof, setUploadingProof] = useState<boolean>(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
+  const [uploadingVideo, setUploadingVideo] = useState<boolean>(false);
+  const [userPayments, setUserPayments] = useState<any[]>([]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -100,11 +104,12 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resLanding, resBcv, resMethods, resBanks] = await Promise.all([
+      const [resLanding, resBcv, resMethods, resBanks, resUserPayments] = await Promise.all([
         fetch("/api/landing"),
         fetch("/api/bcv"),
         fetch("/api/super-admin/payment-methods"),
-        fetch("/api/banks")
+        fetch("/api/banks"),
+        fetch("/api/payments")
       ]);
 
       if (resLanding.ok) {
@@ -147,6 +152,11 @@ export default function AdminDashboardPage() {
       if (resBcv.ok) {
         const bData = await resBcv.json();
         if (bData.rate) setBcvRate(bData.rate);
+      }
+
+      if (resUserPayments.ok) {
+        const payData = await resUserPayments.json();
+        setUserPayments(payData.payments || []);
       }
     } catch (err) {
       console.error("Error loading dashboard data:", err);
@@ -197,14 +207,14 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Upload file (Avatar or Video) to Cloudflare R2
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "video") => {
+  // Upload file (Avatar, Video, or Payment Proof Image)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "video" | "proof") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isVideo = type === "video";
-    if (isVideo) setUploadingVideo(true);
-    else setUploadingAvatar(true);
+    if (type === "video") setUploadingVideo(true);
+    else if (type === "avatar") setUploadingAvatar(true);
+    else setUploadingProof(true);
 
     try {
       const formData = new FormData();
@@ -218,22 +228,26 @@ export default function AdminDashboardPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        showToast(`❌ ${data.error || "Error al subir archivo a R2"}`);
+        showToast(`❌ ${data.error || "Error al subir archivo"}`);
       } else {
         if (type === "avatar") {
           setAvatarUrl(data.url);
-          showToast("✅ Imagen de perfil subida a Cloudflare R2");
-        } else {
+          showToast("✅ Imagen de perfil subida");
+        } else if (type === "video") {
           setBackgroundType("video");
           setBackgroundUrl(data.url);
-          showToast("✅ Video de fondo subido exitosamente a Cloudflare R2");
+          showToast("✅ Video de fondo subido exitosamente");
+        } else {
+          setProofUrl(data.url);
+          showToast("✅ Comprobante / Capture de pago subido correctamente");
         }
       }
     } catch (err: any) {
       showToast("❌ Error de red al subir archivo");
     } finally {
-      if (isVideo) setUploadingVideo(false);
-      else setUploadingAvatar(false);
+      if (type === "video") setUploadingVideo(false);
+      else if (type === "avatar") setUploadingAvatar(false);
+      else setUploadingProof(false);
     }
   };
 
@@ -298,7 +312,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleRequireUpgrade = (iconName: string) => {
-    showToast(`🔒 El ícono '${iconName}' requiere el Plan PAGO PRO. ¡Actualiza tu plan por solo $4.99/mes en la pestaña Plan & Pagos!`);
+    showToast(`🔒 El ícono '${iconName}' requiere el Plan PAGO PRO. ¡Actualiza tu plan en la pestaña Plan & Pagos!`);
   };
 
   // Toggle or Edit Link
@@ -328,13 +342,14 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Submit Payment Declaration (USD or VES)
+  // Submit Payment Declaration (USD or VES, Multi-month support, Capture proof)
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentRef) return;
 
     const selectedPm = paymentMethods.find(pm => pm.id === selectedMethodId);
-    const amountUsd = 4.99;
+    const planPrice = planData?.price_usd || 4.99;
+    const amountUsd = Number((planPrice * monthsPaid).toFixed(2));
     const amountVes = Number((amountUsd * bcvRate).toFixed(2));
 
     setSubmittingPayment(true);
@@ -347,6 +362,7 @@ export default function AdminDashboardPage() {
           amount_usd: amountUsd,
           amount_ves: amountVes,
           bcv_rate: bcvRate,
+          months_paid: monthsPaid,
           plan_id: "PAGO",
           payment_method_id: selectedMethodId,
           payment_currency: selectedPm ? selectedPm.currency : "VES",
@@ -356,6 +372,7 @@ export default function AdminDashboardPage() {
           payer_name: payerName,
           payer_phone: payerPhone,
           payer_id_number: payerIdNumber,
+          proof_url: proofUrl,
           notes: paymentNotes
         })
       });
@@ -364,12 +381,13 @@ export default function AdminDashboardPage() {
       if (!res.ok) {
         showToast(`❌ ${data.error}`);
       } else {
-        showToast("🎉 ¡Declaración de pago registrada con éxito! El Administrador verificará los fondos y tu suscripción de 30 días se activará al ser aprobada.");
+        showToast(data.message || `🎉 ¡Declaración de pago por ${monthsPaid} mes(es) registrada con éxito! El Administrador verificará los fondos.`);
         setPaymentRef("");
         setPayerName("");
         setPayerPhone("");
         setPayerIdNumber("");
         setPaymentNotes("");
+        setProofUrl("");
         loadData();
       }
     } catch (err: any) {
@@ -404,6 +422,16 @@ export default function AdminDashboardPage() {
     social_icons: true,
     max_links: 5
   };
+
+  // Subscription calculation
+  const expiresAtMs = userData?.subscription_expires_at ? new Date(userData.subscription_expires_at).getTime() : 0;
+  const nowMs = Date.now();
+  const diffMs = expiresAtMs - nowMs;
+  const isPaidActive = userData?.plan_id === "PAGO" && diffMs > 0;
+  const daysRemaining = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const hoursRemaining = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+  const totalDaysCycle = 30; // base visual percentage
+  const subscriptionPercent = Math.min(100, Math.max(0, Math.round((daysRemaining / totalDaysCycle) * 100)));
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -456,6 +484,73 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* --- BANNER DESTACADO DE CUENTA REGRESIVA DE SUSCRIPCIÓN (DEBAJO DE LA CABECERA) --- */}
+      <div className="bg-slate-900 border-b border-slate-800 px-6 py-3.5">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+              isPaidActive
+                ? daysRemaining > 10 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30"
+            }`}>
+              <Crown className="w-5 h-5" />
+            </div>
+
+            <div>
+              {isPaidActive ? (
+                <div>
+                  <h4 className="text-xs font-black text-white flex items-center gap-2">
+                    Suscripción PAGO PRO Activa
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                      {daysRemaining} días y {hoursRemaining} horas restantes
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Vence el {new Date(expiresAtMs).toLocaleDateString()} a las {new Date(expiresAtMs).toLocaleTimeString()}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200">
+                    Estás usando el <strong className="text-indigo-400">Plan Gratuito</strong>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Desbloquea enlaces ilimitados, +60 íconos exclusivos y videos de fondo por solo $4.99/mes.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Progress Bar & Renewal Action */}
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+            {isPaidActive && (
+              <div className="w-48 hidden sm:block">
+                <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                  <span>Tiempo Restante</span>
+                  <span>{daysRemaining}d</span>
+                </div>
+                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${
+                      daysRemaining > 10 ? "from-emerald-500 to-teal-400" : daysRemaining > 3 ? "from-amber-500 to-orange-500" : "from-rose-500 to-red-600 animate-pulse"
+                    }`}
+                    style={{ width: `${Math.max(5, subscriptionPercent)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setActiveTab("plan")}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md shadow-amber-500/20 whitespace-nowrap"
+            >
+              {isPaidActive ? "⚡ Renovar / Ampliar Plan" : "🚀 Activar Plan PRO"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -916,45 +1011,34 @@ export default function AdminDashboardPage() {
                     <Crown className="w-5 h-5 text-amber-400" /> Plan de Membresía Actual
                   </h3>
                   <span className={`px-3 py-1 rounded-full border font-bold text-xs ${
-                    userData?.plan_id === "PAGO"
+                    isPaidActive
                       ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                       : "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
                   }`}>
-                    {userData?.plan_id === "PAGO" ? "PAGO PRO (Activo)" : "GRATIS"}
+                    {isPaidActive ? "PAGO PRO (Activo)" : "GRATIS"}
                   </span>
                 </div>
 
-                {/* 30-Day Subscription Progress Bar for PAGO users */}
-                {userData?.plan_id === "PAGO" && (
+                {/* 30-Day / Multi-month Subscription Progress Bar for PAGO users */}
+                {isPaidActive && (
                   <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-indigo-500/10 border border-emerald-500/30 space-y-2">
-                    {(() => {
-                      const expiresAt = userData?.subscription_expires_at ? new Date(userData.subscription_expires_at).getTime() : Date.now() + 30 * 24 * 60 * 60 * 1000;
-                      const diffMs = expiresAt - Date.now();
-                      const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-                      const percent = Math.min(100, Math.max(0, Math.round((daysLeft / 30) * 100)));
-
-                      return (
-                        <>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white flex items-center gap-1.5">
-                              <Sparkles className="w-4 h-4 text-emerald-400" /> Suscripción PRO Activa
-                            </span>
-                            <span className="font-bold text-emerald-300">
-                              {daysLeft > 0 ? `${daysLeft} de 30 días restantes` : "Vence hoy"}
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 transition-all duration-500"
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                          <p className="text-[11px] text-slate-400">
-                            El contador de 30 días comenzó al momento de la aprobación del pago por el Administrador.
-                          </p>
-                        </>
-                      );
-                    })()}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" /> Suscripción PRO Activa
+                      </span>
+                      <span className="font-bold text-emerald-300">
+                        {daysRemaining} días y {hoursRemaining}h restantes
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 transition-all duration-500"
+                        style={{ width: `${Math.max(5, subscriptionPercent)}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Vence el {new Date(expiresAtMs).toLocaleDateString()} a las {new Date(expiresAtMs).toLocaleTimeString()}
+                    </p>
                   </div>
                 )}
 
@@ -977,21 +1061,54 @@ export default function AdminDashboardPage() {
                 <div>
                   <h3 className="text-xl font-black text-white">Declarar Pago de Suscripción PRO</h3>
                   <p className="text-slate-300 text-xs mt-1">
-                    Selecciona tu método de pago preferido en Bolívares o Dólares, efectúa el pago e ingresa la referencia. El Administrador verificará los fondos y tus 30 días comenzarán al ser aprobado.
+                    Selecciona la duración de tu plan (1, 2, 3, 6 o 12 meses), efectúa el pago y adjunta tu capture/comprobante. Si renuevas antes del vencimiento, los días se **sumarán acumulativamente**.
                   </p>
+                </div>
+
+                {/* Duration Multi-month Selector */}
+                <div>
+                  <label className="block text-xs font-semibold text-amber-300 mb-2">
+                    Duración del Plan (Selecciona la cantidad de meses)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { months: 1, label: "1 Mes", days: "30 Días" },
+                      { months: 2, label: "2 Meses", days: "60 Días" },
+                      { months: 3, label: "3 Meses", days: "90 Días" },
+                      { months: 6, label: "6 Meses", days: "180 Días" },
+                      { months: 12, label: "1 Año", days: "360 Días" }
+                    ].map(opt => (
+                      <button
+                        key={opt.months}
+                        type="button"
+                        onClick={() => setMonthsPaid(opt.months)}
+                        className={`p-2.5 rounded-xl border text-xs text-center transition-all ${
+                          monthsPaid === opt.months
+                            ? "bg-amber-500 text-slate-950 font-black border-amber-400 shadow-md"
+                            : "bg-slate-950/80 text-slate-300 border-slate-800 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="font-bold">{opt.label}</div>
+                        <div className="text-[10px] opacity-80">{opt.days}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Price Conversion Box */}
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
                   <div>
-                    <span className="text-xs text-slate-400">Monto Mensual USD:</span>
-                    <p className="text-2xl font-black text-white">$4.99 <span className="text-xs font-normal text-slate-400">/ 30 días</span></p>
+                    <span className="text-xs text-slate-400">Total USD ({monthsPaid} mes/es):</span>
+                    <p className="text-2xl font-black text-white">
+                      ${((planData?.price_usd || 4.99) * monthsPaid).toFixed(2)}{" "}
+                      <span className="text-xs font-normal text-slate-400">/ {monthsPaid * 30} días</span>
+                    </p>
                   </div>
 
                   <div className="text-right">
                     <span className="text-xs text-amber-400 font-semibold">Tasa Oficial BCV: {bcvRate.toFixed(2)} Bs</span>
                     <p className="text-xl font-extrabold text-emerald-400">
-                      {(4.99 * bcvRate).toFixed(2)} Bs.
+                      {(((planData?.price_usd || 4.99) * monthsPaid) * bcvRate).toFixed(2)} Bs.
                     </p>
                   </div>
                 </div>
@@ -1050,7 +1167,7 @@ export default function AdminDashboardPage() {
                     );
                   })()}
 
-                  {/* Step 2: Adaptive Form Fields */}
+                  {/* Step 2: Adaptive Form Fields & Capture Uploader */}
                   {(() => {
                     const pm = paymentMethods.find(m => m.id === selectedMethodId);
                     const isVes = pm?.currency === "VES";
@@ -1122,18 +1239,112 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
 
+                        {/* Capture File Upload Input */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">
+                            Adjuntar Capture / Comprobante de Pago (Imagen)
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500 text-xs font-semibold text-slate-200 flex items-center gap-2 transition-all">
+                              <Upload className="w-4 h-4 text-amber-400" />
+                              <span>{uploadingProof ? "Subiendo Capture..." : proofUrl ? "Cambiar Capture" : "Subir Foto de Comprobante"}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleFileUpload(e, "proof")}
+                                disabled={uploadingProof}
+                                className="hidden"
+                              />
+                            </label>
+                            {proofUrl && (
+                              <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                                ✓ Capture Adjuntado Exitosamente
+                              </span>
+                            )}
+                          </div>
+                          {proofUrl && (
+                            <div className="mt-2">
+                              <img src={proofUrl} alt="Vista previa capture" className="h-20 w-auto rounded-lg border border-slate-800 object-contain bg-slate-950 p-1" />
+                            </div>
+                          )}
+                        </div>
+
                         <button
                           type="submit"
                           disabled={submittingPayment}
                           className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-amber-500/20 mt-2"
                         >
-                          {submittingPayment ? "Registrando Declaración..." : "Enviar Declaración de Pago para Aprobación"}
+                          {submittingPayment ? "Registrando Declaración..." : `Enviar Declaración de Pago por ${monthsPaid} Mes(es) para Aprobación`}
                         </button>
                       </div>
                     );
                   })()}
                 </form>
               </div>
+
+              {/* HISTORIAL DE PAGOS REALIZADOS DEL USUARIO */}
+              <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  📜 Historial de Pagos Realizados
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Visualiza el estado y fecha de aprobación de tus solicitudes de pago anteriores.
+                </p>
+
+                {userPayments.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 bg-slate-950 rounded-2xl border border-slate-800">
+                    Aún no has registrado declaraciones de pago.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950 text-slate-400 font-semibold text-[10px] uppercase">
+                        <tr>
+                          <th className="p-3">Fecha Declaración</th>
+                          <th className="p-3">Duración / Plan</th>
+                          <th className="p-3">Monto Total</th>
+                          <th className="p-3">Referencia</th>
+                          <th className="p-3">Estado</th>
+                          <th className="p-3">Fecha Aprobación</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {userPayments.map((p) => (
+                          <tr key={p.id} className="hover:bg-slate-900/50">
+                            <td className="p-3 font-mono text-slate-400">
+                              {new Date(p.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="p-3 font-bold text-white">
+                              {p.months_paid ? `${p.months_paid} Mes(es)` : "1 Mes"} ({p.plan_id || "PAGO"})
+                            </td>
+                            <td className="p-3 font-bold text-emerald-400">
+                              ${p.amount_usd} USD <span className="text-[10px] text-slate-400 block font-normal">({p.amount_ves} Bs.)</span>
+                            </td>
+                            <td className="p-3 font-mono text-amber-300">
+                              {p.reference}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                p.status === "pending"
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  : p.status === "approved"
+                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              }`}>
+                                {p.status === "pending" ? "Pendiente" : p.status === "approved" ? "Aprobado" : "Rechazado"}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-400 font-mono">
+                              {p.approved_at ? new Date(p.approved_at).toLocaleDateString() : "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 
@@ -1176,3 +1387,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+

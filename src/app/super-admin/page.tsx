@@ -63,6 +63,11 @@ export default function SuperAdminDashboardPage() {
   const [newBankCode, setNewBankCode] = useState("");
   const [newBankName, setNewBankName] = useState("");
 
+  // Modal states for editing
+  const [editingBank, setEditingBank] = useState<any | null>(null);
+  const [editingMethod, setEditingMethod] = useState<any | null>(null);
+  const [viewingPayment, setViewingPayment] = useState<any | null>(null);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/login");
@@ -77,7 +82,7 @@ export default function SuperAdminDashboardPage() {
         fetch("/api/super-admin/users"),
         fetch("/api/super-admin/payments"),
         fetch("/api/super-admin/payment-methods"),
-        fetch("/api/banks"),
+        fetch("/api/banks?all=true"),
         fetch("/api/bcv")
       ]);
 
@@ -215,6 +220,7 @@ export default function SuperAdminDashboardPage() {
         showToast(`❌ ${data.error}`);
       } else {
         showToast(data.message || (action === "approve" ? "🎉 Pago aprobado" : "Pago rechazado"));
+        setViewingPayment(null);
         loadData();
       }
     } catch (err) {
@@ -265,6 +271,31 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
+  // Update Payment Method (via Edit Modal)
+  const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMethod || !editingMethod.id) return;
+
+    try {
+      const res = await fetch("/api/super-admin/payment-methods", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingMethod)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error}`);
+      } else {
+        showToast("✅ Método de pago actualizado correctamente");
+        setEditingMethod(null);
+        loadData();
+      }
+    } catch (err) {
+      showToast("❌ Error al actualizar método de pago");
+    }
+  };
+
   // Toggle Payment Method Active state
   const handleTogglePaymentMethod = async (id: string, is_active: boolean) => {
     try {
@@ -282,6 +313,7 @@ export default function SuperAdminDashboardPage() {
 
   // Delete Payment Method
   const handleDeletePaymentMethod = async (id: string) => {
+    if (!confirm("¿Estás seguro de eliminar este método de pago?")) return;
     try {
       await fetch(`/api/super-admin/payment-methods?id=${id}`, { method: "DELETE" });
       showToast("🗑️ Método de pago eliminado");
@@ -317,6 +349,51 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
+  // Update Bank (via Edit Modal)
+  const handleUpdateBank = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBank) return;
+
+    try {
+      const res = await fetch("/api/banks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          old_code: editingBank.old_code || editingBank.code,
+          code: editingBank.code,
+          name: editingBank.name,
+          is_active: editingBank.is_active
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error}`);
+      } else {
+        showToast("✅ Banco actualizado correctamente");
+        setEditingBank(null);
+        loadData();
+      }
+    } catch (err) {
+      showToast("❌ Error al actualizar banco");
+    }
+  };
+
+  // Delete Bank
+  const handleDeleteBank = async (code: string) => {
+    if (!confirm(`¿Estás seguro de eliminar el banco con código ${code}?`)) return;
+    try {
+      const res = await fetch(`/api/banks?code=${code}`, { method: "DELETE" });
+      if (res.ok) {
+        showToast("🗑️ Banco eliminado del catálogo");
+        if (editingBank?.code === code) setEditingBank(null);
+        loadData();
+      }
+    } catch (err) {
+      showToast("❌ Error al eliminar banco");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
@@ -336,7 +413,7 @@ export default function SuperAdminDashboardPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative">
       {/* Header Bar */}
       <header className="glass-panel border-b border-slate-800/80 px-6 py-4 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -468,7 +545,7 @@ export default function SuperAdminDashboardPage() {
                 <Clock className="w-5 h-5 text-amber-400" /> Aprobación de Declaraciones de Pago
               </h2>
               <p className="text-slate-400 text-xs mt-1">
-                Al hacer clic en "Aprobar", la suscripción PAGO PRO del usuario se activa por 30 días contados exactamente desde el momento de la aprobación.
+                Inspecciona los comprobantes (capturas de pantalla) y aprueba la suscripción del usuario por la cantidad de meses declarados.
               </p>
             </div>
 
@@ -496,12 +573,17 @@ export default function SuperAdminDashboardPage() {
                             ? "bg-amber-500 text-slate-950 animate-pulse"
                             : p.status === "approved"
                             ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/20"
                         }`}>
                           {p.status === "pending" ? "Pendiente por Aprobar" : p.status === "approved" ? "Aprobado" : "Rechazado"}
                         </span>
                         <span className="text-xs font-bold text-white">{p.user_name || p.user_email}</span>
                         <span className="text-[11px] text-slate-400 font-mono">({p.user_email})</span>
+                        {p.months_paid && p.months_paid > 1 && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-extrabold">
+                            {p.months_paid} Meses ({p.months_paid * 30} Días)
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-300 pt-1">
@@ -522,10 +604,22 @@ export default function SuperAdminDashboardPage() {
                       </div>
 
                       {(p.payer_name || p.payer_phone || p.payer_id_number) && (
-                        <div className="text-[11px] text-slate-400 pt-1 flex items-center gap-3">
+                        <div className="text-[11px] text-slate-400 pt-1 flex items-center gap-3 flex-wrap">
                           <span>Titular: <strong className="text-slate-200">{p.payer_name || "N/A"}</strong></span>
                           <span>Cédula/RIF: <strong className="text-slate-200">{p.payer_id_number || "N/A"}</strong></span>
                           <span>Teléfono: <strong className="text-slate-200">{p.payer_phone || "N/A"}</strong></span>
+                        </div>
+                      )}
+
+                      {/* Proof Image Button */}
+                      {p.proof_url && (
+                        <div className="pt-2">
+                          <button
+                            onClick={() => setViewingPayment(p)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-xs font-bold border border-indigo-500/30 transition-all"
+                          >
+                            🖼️ Ver Comprobante / Capture
+                          </button>
                         </div>
                       )}
                     </div>
@@ -572,10 +666,10 @@ export default function SuperAdminDashboardPage() {
           <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
             <div>
               <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-emerald-400" /> Gestión de Usuarios y Progreso de 30 Días
+                <UserCheck className="w-5 h-5 text-emerald-400" /> Gestión de Usuarios y Progreso de Suscripción
               </h2>
               <p className="text-slate-400 text-xs mt-1">
-                La barra de progreso descuenta automáticamente los 30 días del plan PAGO a partir del momento exacto de aprobación del pago.
+                La barra de progreso descuenta automáticamente los días del plan PAGO a partir del momento exacto de aprobación del pago.
               </p>
             </div>
 
@@ -586,7 +680,7 @@ export default function SuperAdminDashboardPage() {
                     <th className="p-3">Usuario / Email</th>
                     <th className="p-3">Slug Público</th>
                     <th className="p-3">Plan Activo</th>
-                    <th className="p-3 min-w-[200px]">Progreso Suscripción (30 Días)</th>
+                    <th className="p-3 min-w-[200px]">Progreso Suscripción</th>
                     <th className="p-3">Fecha Registro</th>
                     <th className="p-3 text-right">Acción Plan</th>
                   </tr>
@@ -621,7 +715,7 @@ export default function SuperAdminDashboardPage() {
                             <div className="space-y-1">
                               <div className="flex items-center justify-between text-[11px]">
                                 <span className="font-bold text-slate-200">
-                                  {remainingDays > 0 ? `${remainingDays} de 30 días restantes` : "Suscripción Expirada"}
+                                  {remainingDays > 0 ? `${remainingDays} días restantes` : "Suscripción Expirada"}
                                 </span>
                                 <span className="font-mono text-slate-400">{percent}%</span>
                               </div>
@@ -818,7 +912,7 @@ export default function SuperAdminDashboardPage() {
             {/* List of active methods */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {paymentMethods.map((pm) => (
-                <div key={pm.id} className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-2">
+                <div key={pm.id} className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
@@ -830,6 +924,14 @@ export default function SuperAdminDashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingMethod({ ...pm })}
+                        className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300"
+                        title="Editar Método"
+                      >
+                        ✏️
+                      </button>
+
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
@@ -1040,7 +1142,22 @@ export default function SuperAdminDashboardPage() {
                       <span className="font-mono text-indigo-400 font-bold block">{b.code}</span>
                       <span className="text-white font-medium truncate block">{b.name}</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Activo</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingBank({ old_code: b.code, code: b.code, name: b.name, is_active: Boolean(b.is_active) })}
+                        className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300"
+                        title="Editar Banco"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBank(b.code)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
+                        title="Eliminar Banco"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1049,6 +1166,326 @@ export default function SuperAdminDashboardPage() {
         )}
 
       </div>
+
+      {/* --- MODAL DE EDICIÓN DE BANCO --- */}
+      {editingBank && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                ✏️ Editar Banco Venezolano
+              </h3>
+              <button onClick={() => setEditingBank(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdateBank} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Código Bancario (4 dígitos)</label>
+                <input
+                  type="text"
+                  required
+                  value={editingBank.code}
+                  onChange={(e) => setEditingBank({ ...editingBank, code: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Nombre Oficial del Banco</label>
+                <input
+                  type="text"
+                  required
+                  value={editingBank.name}
+                  onChange={(e) => setEditingBank({ ...editingBank, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-300 font-semibold">Estado del Banco</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingBank({ ...editingBank, is_active: !editingBank.is_active })}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                    editingBank.is_active ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                  }`}
+                >
+                  {editingBank.is_active ? "HABILITADO" : "INHABILITADO"}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBank(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-600/30"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DE EDICIÓN DE MÉTODO DE PAGO --- */}
+      {editingMethod && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 max-w-lg w-full space-y-4 my-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                ✏️ Editar Método de Pago ({editingMethod.currency})
+              </h3>
+              <button onClick={() => setEditingMethod(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdatePaymentMethod} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Nombre Identificador</label>
+                <input
+                  type="text"
+                  required
+                  value={editingMethod.name}
+                  onChange={(e) => setEditingMethod({ ...editingMethod, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Moneda</label>
+                  <select
+                    value={editingMethod.currency}
+                    onChange={(e) => setEditingMethod({ ...editingMethod, currency: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="VES">VES (Bolívares)</option>
+                    <option value="USD">USD (Dólares)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Tipo</label>
+                  <select
+                    value={editingMethod.type}
+                    onChange={(e) => setEditingMethod({ ...editingMethod, type: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                  >
+                    <option value="pago_movil">Pago Móvil</option>
+                    <option value="bank_transfer">Transferencia Bancaria</option>
+                    <option value="binance">Binance Pay</option>
+                    <option value="zinli">Zinli</option>
+                    <option value="zelle">Zelle / Otro</option>
+                  </select>
+                </div>
+              </div>
+
+              {editingMethod.currency === "VES" && (
+                <>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Banco Receptor</label>
+                    <select
+                      value={editingMethod.bank_code || ""}
+                      onChange={(e) => {
+                        const selected = banks.find(b => b.code === e.target.value);
+                        setEditingMethod({
+                          ...editingMethod,
+                          bank_code: e.target.value,
+                          bank_name: selected ? selected.name : editingMethod.bank_name
+                        });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                    >
+                      <option value="">Selecciona Banco...</option>
+                      {banks.map(b => (
+                        <option key={b.code} value={b.code}>{b.code} - {b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Cédula / RIF</label>
+                      <input
+                        type="text"
+                        value={editingMethod.id_number || ""}
+                        onChange={(e) => setEditingMethod({ ...editingMethod, id_number: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Teléfono</label>
+                      <input
+                        type="text"
+                        value={editingMethod.phone_number || ""}
+                        onChange={(e) => setEditingMethod({ ...editingMethod, phone_number: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {editingMethod.type === "bank_transfer" && (
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Número de Cuenta (20 dígitos)</label>
+                      <input
+                        type="text"
+                        value={editingMethod.account_number || ""}
+                        onChange={(e) => setEditingMethod({ ...editingMethod, account_number: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {editingMethod.currency === "USD" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      value={editingMethod.email || ""}
+                      onChange={(e) => setEditingMethod({ ...editingMethod, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Binance Pay ID</label>
+                    <input
+                      type="text"
+                      value={editingMethod.pay_id || ""}
+                      onChange={(e) => setEditingMethod({ ...editingMethod, pay_id: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Instrucciones Especiales</label>
+                <textarea
+                  rows={2}
+                  value={editingMethod.instructions || ""}
+                  onChange={(e) => setEditingMethod({ ...editingMethod, instructions: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-300 font-semibold">Estado del Método</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingMethod({ ...editingMethod, is_active: !editingMethod.is_active })}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                    editingMethod.is_active ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                  }`}
+                >
+                  {editingMethod.is_active ? "ACTIVO" : "INACTIVO"}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingMethod(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-600/30"
+                >
+                  Guardar Método
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL VISOR DE CAPTURE DE PAGO --- */}
+      {viewingPayment && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 max-w-2xl w-full space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  🖼️ Comprobante de Pago Declarado
+                </h3>
+                <p className="text-xs text-slate-400 font-mono">ID: {viewingPayment.id}</p>
+              </div>
+              <button onClick={() => setViewingPayment(null)} className="text-slate-400 hover:text-white font-bold">✕ Cerrar</button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6">
+              <div className="flex-1 bg-slate-950 rounded-2xl p-2 border border-slate-800 flex items-center justify-center min-h-[250px]">
+                {viewingPayment.proof_url ? (
+                  <img
+                    src={viewingPayment.proof_url}
+                    alt="Capture de Pago"
+                    className="max-h-[400px] w-auto object-contain rounded-xl shadow-2xl"
+                  />
+                ) : (
+                  <div className="text-xs text-slate-500 p-8 text-center">Sin imagen adjunta</div>
+                )}
+              </div>
+
+              <div className="w-full md:w-64 space-y-3 text-xs text-slate-300">
+                <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase block">Usuario</span>
+                  <strong className="text-white block truncate">{viewingPayment.user_name || viewingPayment.user_email}</strong>
+                  <span className="text-[10px] text-slate-400 block font-mono">{viewingPayment.user_email}</span>
+                </div>
+
+                <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase block">Monto a Verificar</span>
+                  <strong className="text-emerald-400 text-sm block">${viewingPayment.amount_usd} USD</strong>
+                  <span className="text-[11px] text-slate-400 block font-mono">({viewingPayment.amount_ves} Bs.)</span>
+                  {viewingPayment.months_paid && (
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold">
+                      {viewingPayment.months_paid} Meses ({viewingPayment.months_paid * 30} Días)
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase block">Datos de Transferencia</span>
+                  <p>Banco: <strong>{viewingPayment.origin_bank_name || "N/A"}</strong></p>
+                  <p>Ref: <strong className="font-mono text-amber-300">{viewingPayment.reference}</strong></p>
+                  <p>Titular: <strong>{viewingPayment.payer_name || "N/A"}</strong></p>
+                  <p>Cédula/RIF: <strong>{viewingPayment.payer_id_number || "N/A"}</strong></p>
+                </div>
+
+                {viewingPayment.status === "pending" && (
+                  <div className="space-y-2 pt-2">
+                    <button
+                      onClick={() => handleApproveOrRejectPayment(viewingPayment.id, "approve")}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30"
+                    >
+                      <CheckCircle2 className="w-4 h-4" /> Aprobar este Pago
+                    </button>
+                    <button
+                      onClick={() => handleApproveOrRejectPayment(viewingPayment.id, "reject")}
+                      className="w-full py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs flex items-center justify-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" /> Rechazar Pago
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

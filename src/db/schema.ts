@@ -115,6 +115,7 @@ export interface PaymentRecord {
   amount_usd: number;
   amount_ves: number;
   bcv_rate: number;
+  months_paid?: number;
   payment_method_id?: string;
   payment_currency: 'VES' | 'USD';
   origin_bank_code?: string;
@@ -124,6 +125,7 @@ export interface PaymentRecord {
   payer_name?: string;
   payer_phone?: string;
   payer_id_number?: string;
+  proof_url?: string;
   notes?: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
@@ -219,6 +221,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount_usd REAL NOT NULL,
   amount_ves REAL NOT NULL,
   bcv_rate REAL NOT NULL,
+  months_paid INTEGER NOT NULL DEFAULT 1,
   payment_method_id TEXT,
   payment_currency TEXT NOT NULL DEFAULT 'VES',
   origin_bank_code TEXT,
@@ -228,6 +231,7 @@ CREATE TABLE IF NOT EXISTS payments (
   payer_name TEXT,
   payer_phone TEXT,
   payer_id_number TEXT,
+  proof_url TEXT,
   notes TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

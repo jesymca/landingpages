@@ -42,7 +42,7 @@ export async function PUT(req: Request) {
 
     // Get payment details
     const payRes = await dbClient.execute({
-      sql: "SELECT user_id, plan_id, status FROM payments WHERE id = ?",
+      sql: "SELECT user_id, plan_id, months_paid, status FROM payments WHERE id = ?",
       args: [payment_id]
     });
 
@@ -51,6 +51,8 @@ export async function PUT(req: Request) {
     }
 
     const payment = payRes.rows[0];
+    const monthsPaid = Number(payment.months_paid) > 0 ? Number(payment.months_paid) : 1;
+    const daysToAdd = monthsPaid * 30;
 
     if (action === "approve") {
       // 1. Update Payment status to approved with current timestamp
@@ -59,19 +61,41 @@ export async function PUT(req: Request) {
         args: [payment_id]
       });
 
-      // 2. Upgrade User Plan to PAGO and start 30-day subscription timer from approval date!
-      await dbClient.execute({
-        sql: `UPDATE users
-              SET plan_id = ?,
-                  subscription_started_at = CURRENT_TIMESTAMP,
-                  subscription_expires_at = datetime('now', '+30 days')
-              WHERE id = ?`,
-        args: [payment.plan_id || "PAGO", payment.user_id]
+      // 2. Check user current subscription status to extend if active, or start fresh if expired
+      const userRes = await dbClient.execute({
+        sql: "SELECT plan_id, subscription_expires_at FROM users WHERE id = ?",
+        args: [payment.user_id]
       });
+
+      const user = userRes.rows[0];
+      const nowMs = Date.now();
+      const currentExpiresMs = user?.subscription_expires_at ? new Date(user.subscription_expires_at as string).getTime() : 0;
+      const isActivePaid = user?.plan_id === (payment.plan_id || "PAGO") && currentExpiresMs > nowMs;
+
+      if (isActivePaid) {
+        // Extend existing expiration by daysToAdd
+        await dbClient.execute({
+          sql: `UPDATE users
+                SET plan_id = ?,
+                    subscription_expires_at = datetime(subscription_expires_at, '+' || ? || ' days')
+                WHERE id = ?`,
+          args: [payment.plan_id || "PAGO", `${daysToAdd}`, payment.user_id]
+        });
+      } else {
+        // Start new subscription period from today
+        await dbClient.execute({
+          sql: `UPDATE users
+                SET plan_id = ?,
+                    subscription_started_at = CURRENT_TIMESTAMP,
+                    subscription_expires_at = datetime('now', '+' || ? || ' days')
+                WHERE id = ?`,
+          args: [payment.plan_id || "PAGO", `${daysToAdd}`, payment.user_id]
+        });
+      }
 
       return NextResponse.json({
         success: true,
-        message: "¡Pago APROBADO exitosamente! La suscripción PAGO PRO del usuario ha comenzado hoy y vencerá en 30 días."
+        message: `🎉 ¡Pago APROBADO exitosamente! Se agregaron ${daysToAdd} días (${monthsPaid} mes/es) a la suscripción del usuario.`
       });
     } else {
       // Reject payment
@@ -90,3 +114,4 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: error?.message || "Error al procesar aprobación" }, { status: 500 });
   }
 }
+
