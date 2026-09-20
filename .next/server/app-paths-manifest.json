@@ -1,0 +1,17 @@
+{
+  "/[slug]/page": "app/[slug]/page.js",
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/bcv/route": "app/api/bcv/route.js",
+  "/api/landing/route": "app/api/landing/route.js",
+  "/api/links/route": "app/api/links/route.js",
+  "/api/payments/route": "app/api/payments/route.js",
+  "/api/super-admin/plans/route": "app/api/super-admin/plans/route.js",
+  "/api/super-admin/users/route": "app/api/super-admin/users/route.js",
+  "/api/upload/route": "app/api/upload/route.js",
+  "/auth/login/page": "app/auth/login/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js",
+  "/super-admin/page": "app/super-admin/page.js"
+}

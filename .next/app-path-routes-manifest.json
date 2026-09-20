@@ -1,0 +1,17 @@
+{
+  "/[slug]/page": "/[slug]",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/auth/[...nextauth]/route": "/api/auth/[...nextauth]",
+  "/api/bcv/route": "/api/bcv",
+  "/api/landing/route": "/api/landing",
+  "/api/links/route": "/api/links",
+  "/api/payments/route": "/api/payments",
+  "/api/super-admin/plans/route": "/api/super-admin/plans",
+  "/api/super-admin/users/route": "/api/super-admin/users",
+  "/api/upload/route": "/api/upload",
+  "/auth/login/page": "/auth/login",
+  "/dashboard/page": "/dashboard",
+  "/page": "/",
+  "/super-admin/page": "/super-admin"
+}
