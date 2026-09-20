@@ -77,19 +77,26 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de SUPER_ADMIN." }, { status: 403 });
     }
 
-    const { user_id, plan_id, role } = await req.json();
+    const { user_id, plan_id, role, months } = await req.json();
 
     if (!user_id) {
       return NextResponse.json({ error: "ID de usuario requerido" }, { status: 400 });
     }
 
     if (plan_id === "PAGO") {
+      let expiresAtSql = "datetime('now', '+30 days')";
+      if (months === 'unlimited') {
+        expiresAtSql = "NULL";
+      } else if (typeof months === 'number' && months > 0) {
+        expiresAtSql = `datetime('now', '+${months} months')`;
+      }
+
       await dbClient.execute({
         sql: `UPDATE users
               SET plan_id = 'PAGO',
                   role = COALESCE(?, role),
                   subscription_started_at = CURRENT_TIMESTAMP,
-                  subscription_expires_at = datetime('now', '+30 days')
+                  subscription_expires_at = ${expiresAtSql}
               WHERE id = ?`,
         args: [role ?? null, user_id]
       });

@@ -132,6 +132,16 @@ export interface PaymentRecord {
   approved_at?: string;
 }
 
+export interface Ticket {
+  id: string;
+  code: string;
+  duration_days: number;
+  is_used: number;
+  used_by_user_id?: string;
+  created_at: string;
+  used_at?: string;
+}
+
 // SQL Table Initialization statements
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS plans (
@@ -237,5 +247,16 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   approved_at DATETIME,
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS tickets (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  duration_days INTEGER NOT NULL,
+  is_used INTEGER NOT NULL DEFAULT 0,
+  used_by_user_id TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  used_at DATETIME,
+  FOREIGN KEY (used_by_user_id) REFERENCES users(id)
 );
 `;

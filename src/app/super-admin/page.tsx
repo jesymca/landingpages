@@ -24,7 +24,8 @@ import {
   Clock,
   Check,
   AlertCircle,
-  Percent
+  Percent,
+  Ticket
 } from "lucide-react";
 import { PlanFeatures } from "@/db/schema";
 
@@ -32,7 +33,7 @@ export default function SuperAdminDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [activeSubTab, setActiveSubTab] = useState<"plans" | "payments" | "methods" | "users" | "banks">("payments");
+  const [activeSubTab, setActiveSubTab] = useState<"plans" | "payments" | "methods" | "users" | "banks" | "tickets">("payments");
 
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<any[]>([]);
@@ -41,6 +42,11 @@ export default function SuperAdminDashboardPage() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [bankSearch, setBankSearch] = useState("");
+
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [newTicketAmount, setNewTicketAmount] = useState<number>(1);
+  const [newTicketDuration, setNewTicketDuration] = useState<number>(30);
+  const [creatingTickets, setCreatingTickets] = useState(false);
 
   const [stats, setStats] = useState<any>({ total_users: 0, paid_users: 0, free_users: 0 });
   const [bcvRate, setBcvRate] = useState<number>(36.5);
@@ -166,6 +172,17 @@ export default function SuperAdminDashboardPage() {
       } catch (e) {
         console.error("Error fetching discounts:", e);
       }
+
+      // Fetch tickets
+      try {
+        const resTickets = await fetch("/api/super-admin/tickets", { cache: 'no-store' });
+        if (resTickets.ok) {
+          const tData = await resTickets.json();
+          setTickets(tData.tickets || []);
+        }
+      } catch (e) {
+        console.error("Error fetching tickets:", e);
+      }
     } catch (err) {
       console.error("Error loading super admin data:", err);
     } finally {
@@ -260,12 +277,12 @@ export default function SuperAdminDashboardPage() {
   };
 
   // Update user plan or role
-  const handleUpdateUser = async (userId: string, planId: string, role: string) => {
+  const handleUpdateUser = async (userId: string, planId: string, role: string, months?: number | 'unlimited') => {
     try {
       const res = await fetch("/api/super-admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, plan_id: planId, role })
+        body: JSON.stringify({ user_id: userId, plan_id: planId, role, months })
       });
 
       if (res.ok) {
@@ -465,6 +482,53 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
+  // Create Tickets
+  const handleCreateTickets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setCreatingTickets(true);
+      const res = await fetch("/api/super-admin/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: newTicketAmount, duration_days: newTicketDuration })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error}`);
+      } else {
+        showToast(`✅ ${data.message}`);
+        setNewTicketAmount(1);
+        setNewTicketDuration(30);
+        loadData();
+      }
+    } catch (err) {
+      showToast("❌ Error al crear tickets");
+    } finally {
+      setCreatingTickets(false);
+    }
+  };
+
+  // Delete Ticket
+  const handleDeleteTicket = async (id: string) => {
+    if (!confirm(`¿Estás seguro de eliminar este ticket?`)) return;
+    try {
+      const res = await fetch("/api/super-admin/tickets", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      if (res.ok) {
+        showToast("🗑️ Ticket eliminado");
+        loadData();
+      } else {
+        const data = await res.json();
+        showToast(`❌ ${data.error}`);
+      }
+    } catch (err) {
+      showToast("❌ Error al eliminar ticket");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
@@ -605,6 +669,14 @@ export default function SuperAdminDashboardPage() {
             }`}
           >
             <Building2 className="w-4 h-4" /> Bancos ({banks.length})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("tickets")}
+            className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all ${
+              activeSubTab === "tickets" ? "bg-fuchsia-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Ticket className="w-4 h-4" /> Tickets
           </button>
         </div>
 
@@ -806,12 +878,32 @@ export default function SuperAdminDashboardPage() {
                         </td>
                         <td className="p-3 text-right">
                           <select
-                            value={u.plan_id}
-                            onChange={(e) => handleUpdateUser(u.id, e.target.value, u.role)}
+                            value={u.plan_id === 'GRATIS' ? 'GRATIS' : 'PAGO'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'GRATIS') {
+                                handleUpdateUser(u.id, 'GRATIS', u.role);
+                              } else if (val === 'PAGO_1') {
+                                handleUpdateUser(u.id, 'PAGO', u.role, 1);
+                              } else if (val === 'PAGO_2') {
+                                handleUpdateUser(u.id, 'PAGO', u.role, 2);
+                              } else if (val === 'PAGO_6') {
+                                handleUpdateUser(u.id, 'PAGO', u.role, 6);
+                              } else if (val === 'PAGO_12') {
+                                handleUpdateUser(u.id, 'PAGO', u.role, 12);
+                              } else if (val === 'PAGO_UNLIMITED') {
+                                handleUpdateUser(u.id, 'PAGO', u.role, 'unlimited');
+                              }
+                            }}
                             className="bg-slate-900 border border-slate-800 text-xs text-white rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500"
                           >
                             <option value="GRATIS">Cambiar a GRATIS</option>
-                            <option value="PAGO">Activar PAGO PRO (30d)</option>
+                            {u.plan_id === 'PAGO' && <option value="PAGO" disabled>Actual: PAGO PRO</option>}
+                            <option value="PAGO_1">Activar PAGO PRO (1 Mes)</option>
+                            <option value="PAGO_2">Activar PAGO PRO (2 Meses)</option>
+                            <option value="PAGO_6">Activar PAGO PRO (6 Meses)</option>
+                            <option value="PAGO_12">Activar PAGO PRO (1 Año)</option>
+                            <option value="PAGO_UNLIMITED">Activar PAGO PRO (Ilimitado)</option>
                           </select>
                         </td>
                       </tr>
@@ -1315,6 +1407,120 @@ export default function SuperAdminDashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- TAB 6: GESTIÓN DE TICKETS / CUPONES --- */}
+        {activeSubTab === "tickets" && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-fuchsia-400" /> Generador de Tickets (Cupones Aleatorios)
+              </h2>
+              <p className="text-slate-400 text-xs">
+                Genera códigos aleatorios que los usuarios podrán canjear para obtener días de suscripción gratuita o extender su plan actual.
+              </p>
+
+              <form onSubmit={handleCreateTickets} className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cantidad de Tickets</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    required
+                    value={newTicketAmount}
+                    onChange={(e) => setNewTicketAmount(parseInt(e.target.value) || 1)}
+                    className="w-full sm:w-32 bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Duración (Días)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newTicketDuration}
+                    onChange={(e) => setNewTicketDuration(parseInt(e.target.value) || 1)}
+                    className="w-full sm:w-32 bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                  />
+                </div>
+                <div className="flex-1 self-end w-full">
+                  <button
+                    type="submit"
+                    disabled={creatingTickets}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-fuchsia-600/30"
+                  >
+                    <Plus className="w-4 h-4" /> {creatingTickets ? "Generando..." : "Generar Tickets"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+              <h3 className="text-sm font-bold text-slate-200">Últimos Tickets Generados</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800">
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider">Código</th>
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider">Duración</th>
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider">Estado</th>
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider">Usuario</th>
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider">Creado</th>
+                      <th className="p-3 text-slate-400 font-semibold uppercase tracking-wider text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {tickets.map((t) => (
+                      <tr key={t.id} className="hover:bg-slate-900/50 transition-colors">
+                        <td className="p-3">
+                          <span className="font-mono font-bold text-fuchsia-300 bg-fuchsia-500/10 px-2 py-1 rounded-md border border-fuchsia-500/20">{t.code}</span>
+                        </td>
+                        <td className="p-3 text-slate-300">
+                          {t.duration_days} días
+                        </td>
+                        <td className="p-3">
+                          {t.is_used ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">CANJEADO</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">DISPONIBLE</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {t.is_used ? (
+                            <span className="text-slate-300 font-mono text-[10px]">{t.used_by_email}</span>
+                          ) : (
+                            <span className="text-slate-500 text-[10px]">---</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-400 text-[10px]">
+                          {new Date(t.created_at).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          {!t.is_used && (
+                            <button
+                              onClick={() => handleDeleteTicket(t.id)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 inline-flex"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {tickets.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-slate-500 text-xs">
+                          No hay tickets generados todavía.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

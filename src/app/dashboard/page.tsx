@@ -23,7 +23,8 @@ import {
   LogOut,
   RefreshCw,
   Globe,
-  MessageCircle
+  MessageCircle,
+  Ticket
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -95,6 +96,10 @@ export default function AdminDashboardPage() {
   const [uploadingVideo, setUploadingVideo] = useState<boolean>(false);
   const [userPayments, setUserPayments] = useState<any[]>([]);
   const [discounts, setDiscounts] = useState<any>({ "1": 0, "2": 5, "3": 10, "6": 15, "12": 20 });
+
+  // Ticket Redemption State
+  const [ticketCode, setTicketCode] = useState("");
+  const [redeemingTicket, setRedeemingTicket] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -399,10 +404,35 @@ export default function AdminDashboardPage() {
         setProofUrl("");
         loadData();
       }
-    } catch (err: any) {
-      showToast("❌ Error al registrar declaración de pago");
+    } catch (err) {
+      showToast("❌ Error al procesar el pago");
     } finally {
       setSubmittingPayment(false);
+    }
+  };
+
+  const handleRedeemTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ticketCode) return;
+    try {
+      setRedeemingTicket(true);
+      const res = await fetch("/api/tickets/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: ticketCode })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error}`);
+      } else {
+        showToast(`🎉 ¡Éxito! ${data.message}`);
+        setTicketCode("");
+        loadData(); // Reload plan data
+      }
+    } catch (err) {
+      showToast("❌ Error al canjear ticket");
+    } finally {
+      setRedeemingTicket(false);
     }
   };
 
@@ -1063,6 +1093,35 @@ export default function AdminDashboardPage() {
                     </strong>
                   </div>
                 </div>
+              </div>
+
+              {/* Ticket Redemption Card */}
+              <div className="glass-panel p-6 rounded-3xl border border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-500/5 via-slate-900 to-indigo-950 space-y-4">
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <Ticket className="w-5 h-5 text-fuchsia-400" /> Canjear Ticket o Cupón
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1">
+                    ¿Tienes un código de regalo o promoción? Introdúcelo aquí para obtener días adicionales de suscripción PRO.
+                  </p>
+                </div>
+                <form onSubmit={handleRedeemTicket} className="flex flex-col sm:flex-row items-center gap-3">
+                  <input
+                    type="text"
+                    required
+                    value={ticketCode}
+                    onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
+                    placeholder="Ejemplo: TKT-1234ABCD"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={redeemingTicket || !ticketCode}
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-fuchsia-600/30 whitespace-nowrap"
+                  >
+                    <Check className="w-4 h-4" /> {redeemingTicket ? "Canjeando..." : "Canjear Código"}
+                  </button>
+                </form>
               </div>
 
               {/* Payment Declaration Card */}
