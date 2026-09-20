@@ -65,6 +65,12 @@
       "namedRegex": "^/api/bcv(?:/)?$"
     },
     {
+      "page": "/api/debug",
+      "regex": "^/api/debug(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/debug(?:/)?$"
+    },
+    {
       "page": "/api/landing",
       "regex": "^/api/landing(?:/)?$",
       "routeKeys": {},

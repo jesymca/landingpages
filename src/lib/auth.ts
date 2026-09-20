@@ -7,11 +7,19 @@ import crypto from "crypto";
 import { ThemeConfig } from "@/db/schema";
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET || "super-secret-key-landingpages-2026-key",
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === "development",
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "775638125984-36h2mns83rrfo43f2p885an169lng9vg.apps.googleusercontent.com",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "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",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     }),
     CredentialsProvider({
       name: "Credenciales",
@@ -54,11 +62,14 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
         try {
           const email = user.email?.toLowerCase().trim();
-          if (!email) return true;
+          if (!email) {
+            console.error("[Auth] Google signIn: No email found in profile");
+            return false;
+          }
 
           let userId: string;
           let userRole = "ADMIN";
@@ -76,7 +87,9 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (existingUser.rows.length === 0) {
+            // New user - create account and landing page
             userId = `usr_${crypto.randomBytes(6).toString("hex")}`;
+            
             await dbClient.execute({
               sql: `INSERT INTO users (id, email, name, role, google_id, plan_id, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
@@ -104,25 +117,35 @@ export const authOptions: NextAuthOptions = {
                     VALUES (?, ?, ?, ?, '¡Bienvenido a mi página de enlaces!', ?, 'gradient', 'from-slate-900 via-indigo-950 to-slate-900', ?)`,
               args: [landingId, userId, slug, user.name || "Mi Página de Enlaces", user.image || "", JSON.stringify(defaultTheme)]
             });
+
+            console.log(`[Auth] New Google user created: ${email}, userId: ${userId}`);
           } else {
             userId = existingUser.rows[0].id as string;
-            await dbClient.execute({
-              sql: "UPDATE users SET google_id = ? WHERE id = ?",
-              args: [account.providerAccountId, userId]
-            });
+            // Update google_id if not already set
+            if (!existingUser.rows[0].google_id) {
+              await dbClient.execute({
+                sql: "UPDATE users SET google_id = ? WHERE id = ?",
+                args: [account.providerAccountId, userId]
+              });
+            }
+            console.log(`[Auth] Existing Google user logged in: ${email}, userId: ${userId}`);
           }
 
           return true;
-        } catch (err) {
-          console.error("Google sign in callback error:", err);
+        } catch (err: any) {
+          console.error("[Auth] Google sign in callback error:", err?.message || err);
+          // Return true even on DB error so user isn't locked out
+          // The jwt callback will handle creating the session
           return true;
         }
       }
       return true;
     },
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, account, trigger, session }) {
       if (user) {
         const userEmail = (user.email || token.email || "").toLowerCase().trim();
+        
+        // Set defaults
         token.role = userEmail === "herrejose@gmail.com" ? "SUPER_ADMIN" : "ADMIN";
         token.plan_id = userEmail === "herrejose@gmail.com" ? "PAGO" : "GRATIS";
 
@@ -142,8 +165,8 @@ export const authOptions: NextAuthOptions = {
           } else {
             token.id = user.id;
           }
-        } catch (e) {
-          console.error("Error in jwt callback:", e);
+        } catch (e: any) {
+          console.error("[Auth] Error in jwt callback:", e?.message || e);
           token.id = user.id;
         }
       }
@@ -171,8 +194,8 @@ export const authOptions: NextAuthOptions = {
               session.user.slug = dbLanding.rows[0].slug as string;
             }
           }
-        } catch (e) {
-          console.error("Error fetching slug in session callback:", e);
+        } catch (e: any) {
+          console.error("[Auth] Error fetching slug in session callback:", e?.message || e);
         }
       }
       return session;

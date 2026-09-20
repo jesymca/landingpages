@@ -4,6 +4,7 @@
   "/_not-found/page": "app/_not-found/page.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/api/bcv/route": "app/api/bcv/route.js",
+  "/api/debug/route": "app/api/debug/route.js",
   "/api/landing/route": "app/api/landing/route.js",
   "/api/links/route": "app/api/links/route.js",
   "/api/payments/route": "app/api/payments/route.js",
