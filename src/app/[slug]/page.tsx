@@ -154,6 +154,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     let radiusClass = "rounded-2xl";
     if (style === "square") radiusClass = "rounded-none";
     if (style === "pill") radiusClass = "rounded-full";
+    if (style === "rounded") radiusClass = "rounded-2xl";
 
     let extraStyles: React.CSSProperties = {
       backgroundColor: bg,
@@ -187,12 +188,75 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
         color: textCol,
         boxShadow: "0 10px 30px -5px rgba(0, 0, 0, 0.6)",
       };
+    } else if (style === "neumorphism") {
+      extraStyles = {
+        backgroundColor: "#1e293b",
+        color: textCol,
+        boxShadow: "6px 6px 16px rgba(0,0,0,0.6), -6px -6px 16px rgba(255,255,255,0.08)",
+        border: "1px solid rgba(255,255,255,0.05)"
+      };
+    } else if (style === "gradient_border") {
+      extraStyles = {
+        background: `linear-gradient(#0f172a, #0f172a) padding-box, linear-gradient(to right, ${bg}, #ec4899) border-box`,
+        border: "2px solid transparent",
+        color: textCol,
+      };
+    } else if (style === "metallic") {
+      extraStyles = {
+        background: "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #cbd5e1 100%)",
+        color: "#0f172a",
+        boxShadow: "0 4px 20px rgba(255, 255, 255, 0.2)",
+        fontWeight: "bold",
+      };
+    } else if (style === "neon") {
+      extraStyles = {
+        backgroundColor: "rgba(15, 23, 42, 0.9)",
+        borderColor: bg,
+        borderWidth: "2px",
+        color: bg,
+        boxShadow: `0 0 20px ${bg}80, inset 0 0 10px ${bg}40`,
+      };
+    } else if (style === "floating_3d") {
+      extraStyles = {
+        backgroundColor: bg,
+        color: textCol,
+        borderBottom: "4px solid rgba(0,0,0,0.4)",
+        borderRight: "2px solid rgba(0,0,0,0.2)",
+        boxShadow: "0 8px 25px rgba(0,0,0,0.5)",
+      };
+    } else if (style === "underline") {
+      extraStyles = {
+        backgroundColor: "transparent",
+        borderColor: bg,
+        borderBottomWidth: "2px",
+        borderRadius: "0px",
+        color: textCol,
+      };
     }
 
     return { radiusClass, extraStyles };
   };
 
   const { radiusClass, extraStyles } = getButtonStyle();
+
+  // Text formatting & font style
+  const getTextStyleClasses = () => {
+    const textStyle = themeConfig?.text_style || "normal";
+    let styleClass = "";
+    if (textStyle === "bold") styleClass = "font-extrabold";
+    if (textStyle === "italic") styleClass = "italic";
+    if (textStyle === "bold_italic") styleClass = "font-extrabold italic";
+
+    const effect = themeConfig?.text_effect || "none";
+    let effectClass = "";
+    if (effect === "shadow") effectClass = "drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]";
+    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(168,85,247,0.8)]";
+    if (effect === "gradient") effectClass = "bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent font-black";
+
+    return `${styleClass} ${effectClass}`;
+  };
+
+  const fontFamily = themeConfig?.font_family || "Inter";
 
   const backgroundType = landingRow.background_type as string;
   const backgroundUrl = landingRow.background_url as string;
@@ -218,18 +282,42 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     }
 
     if (backgroundType === "gradient") {
+      if (themeConfig?.gradient_color_start && themeConfig?.gradient_color_end) {
+        return (
+          <div
+            className="fixed inset-0 z-0"
+            style={{
+              background: `linear-gradient(135deg, ${themeConfig.gradient_color_start}, ${themeConfig.gradient_color_end})`
+            }}
+          />
+        );
+      }
       return (
         <div className={`fixed inset-0 z-0 bg-gradient-to-br ${backgroundUrl || "from-slate-900 via-indigo-950 to-purple-950"}`} />
       );
     }
 
     if (backgroundType === "image" && backgroundUrl) {
+      let filterStyle: React.CSSProperties = {};
+      const filter = themeConfig?.image_filter || "none";
+
+      if (filter === "darken") filterStyle = { filter: "brightness(0.4)" };
+      else if (filter === "blur") filterStyle = { filter: "blur(8px) scale(1.08)" };
+      else if (filter === "sepia") filterStyle = { filter: "sepia(70%)" };
+      else if (filter === "grayscale") filterStyle = { filter: "grayscale(100%)" };
+      else if (filter === "contrast") filterStyle = { filter: "contrast(140%)" };
+      else if (filter === "hue") filterStyle = { filter: "hue-rotate(90deg)" };
+
       return (
-        <div
-          className="fixed inset-0 z-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${backgroundUrl})` }}
-        >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+        <div className="fixed inset-0 z-0 overflow-hidden">
+          <div
+            className="w-full h-full bg-cover bg-center transition-all duration-300"
+            style={{ backgroundImage: `url(${backgroundUrl})`, ...filterStyle }}
+          />
+          {filter === "vignette" && (
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(0,0,0,0.85)_100%)] pointer-events-none" />
+          )}
+          <div className="absolute inset-0 bg-black/35 pointer-events-none" />
         </div>
       );
     }
@@ -277,7 +365,10 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
   };
 
   return (
-    <div className="min-h-screen text-slate-100 flex flex-col justify-between items-center relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+    <div
+      className="min-h-screen text-slate-100 flex flex-col justify-between items-center relative overflow-x-hidden selection:bg-indigo-500 selection:text-white"
+      style={{ fontFamily: `'${fontFamily}', sans-serif` }}
+    >
       {/* Background */}
       {renderBackground()}
 
@@ -298,7 +389,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
 
           {/* Title & Bio */}
           <h1
-            className="text-2xl font-black text-white tracking-tight drop-shadow-md mb-2"
+            className={`text-2xl font-black text-white tracking-tight drop-shadow-md mb-2 ${getTextStyleClasses()}`}
             style={{ color: themeConfig?.text_color || "#ffffff" }}
           >
             {landingRow.title as string}
@@ -306,7 +397,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
 
           {landingRow.bio && (
             <p
-              className="text-sm font-normal leading-relaxed max-w-sm mx-auto mb-4 opacity-90 drop-shadow-sm"
+              className={`text-sm leading-relaxed max-w-sm mx-auto mb-4 opacity-90 drop-shadow-sm ${getTextStyleClasses()}`}
               style={{ color: themeConfig?.text_color || "#e2e8f0" }}
             >
               {landingRow.bio as string}

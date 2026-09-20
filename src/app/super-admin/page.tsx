@@ -1412,6 +1412,76 @@ export default function SuperAdminDashboardPage() {
                       </button>
                     </div>
 
+                    {/* Custom Image Upload Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-xs text-slate-300">Subir Imágenes Personalizadas de Fondo</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeature(plan.id, "custom_image_upload")}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          plan.features?.custom_image_upload ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {plan.features?.custom_image_upload ? "PERMITIDO" : "BLOQUEADO"}
+                      </button>
+                    </div>
+
+                    {/* Image Effects / Filters Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-xs text-slate-300">Filtros & Efectos de Imagen de Fondo</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeature(plan.id, "image_effects")}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          plan.features?.image_effects ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {plan.features?.image_effects ? "PERMITIDO" : "BLOQUEADO"}
+                      </button>
+                    </div>
+
+                    {/* Extended Gradients Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-xs text-slate-300">Colección Extendida de Gradientes Estéticos</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeature(plan.id, "extended_gradients")}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          plan.features?.extended_gradients ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {plan.features?.extended_gradients ? "PERMITIDO" : "BLOQUEADO"}
+                      </button>
+                    </div>
+
+                    {/* Extended Buttons Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-xs text-slate-300">Estilos Avanzados de Botones</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeature(plan.id, "extended_buttons")}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          plan.features?.extended_buttons ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {plan.features?.extended_buttons ? "PERMITIDO" : "BLOQUEADO"}
+                      </button>
+                    </div>
+
+                    {/* Custom Fonts & Text Effects Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-xs text-slate-300">Fuentes Google Fonts & Efectos de Texto</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeature(plan.id, "custom_fonts")}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          plan.features?.custom_fonts ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {plan.features?.custom_fonts ? "PERMITIDO" : "BLOQUEADO"}
+                      </button>
+                    </div>
+
                     {/* Video Background Toggle */}
                     <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
                       <span className="text-xs text-slate-300">Soporte de Videos de Fondo (.mp4 / R2)</span>

@@ -252,6 +252,68 @@ export default function CommercialLandingPage() {
                       </span>
                     </li>
                     <li className="flex items-center gap-3 text-slate-200">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span>Gradientes con Colores Personalizados</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span>Galería de Imágenes Prediseñadas</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span>Formato Básico (Negrita & Cursiva)</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      {plan.features?.custom_image_upload ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
+                      )}
+                      <span className={plan.features?.custom_image_upload ? "" : "text-slate-500 line-through"}>
+                        Subir Imagen de Fondo Personalizada
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      {plan.features?.image_effects ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
+                      )}
+                      <span className={plan.features?.image_effects ? "" : "text-slate-500 line-through"}>
+                        Filtros de Efectos para Imágenes de Fondo
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      {plan.features?.extended_gradients ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
+                      )}
+                      <span className={plan.features?.extended_gradients ? "" : "text-slate-500 line-through"}>
+                        Colección Extendida de Gradientes Estéticos
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      {plan.features?.extended_buttons ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
+                      )}
+                      <span className={plan.features?.extended_buttons ? "" : "text-slate-500 line-through"}>
+                        Estilos Avanzados de Botones (Brillo, 3D, Cyberpunk)
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      {plan.features?.custom_fonts ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
+                      )}
+                      <span className={plan.features?.custom_fonts ? "" : "text-slate-500 line-through"}>
+                        Tipografías Google Fonts & Efectos de Texto
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
                       {plan.features?.video_background ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                       ) : (
@@ -269,26 +331,6 @@ export default function CommercialLandingPage() {
                       )}
                       <span className={plan.features?.remove_watermark ? "" : "text-slate-500 line-through"}>
                         Eliminar Marca de Agua del Footer
-                      </span>
-                    </li>
-                    <li className="flex items-center gap-3 text-slate-200">
-                      {plan.features?.premium_themes ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
-                      )}
-                      <span className={plan.features?.premium_themes ? "" : "text-slate-500 line-through"}>
-                        Temas Premium y Botones Neon / Glass
-                      </span>
-                    </li>
-                    <li className="flex items-center gap-3 text-slate-200">
-                      {plan.features?.custom_fonts ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
-                      )}
-                      <span className={plan.features?.custom_fonts ? "" : "text-slate-500 line-through"}>
-                        Tipografías Personalizadas (Google Fonts)
                       </span>
                     </li>
                   </ul>

@@ -18,11 +18,15 @@ export interface PlanFeatures {
   remove_watermark: boolean;
   unlimited_links: boolean;
   premium_themes: boolean;
-  custom_fonts: boolean;
+  custom_fonts: boolean; // Fuentes Google Fonts y efectos de texto
   social_icons: boolean;
   max_links: number;
   all_icons: boolean; // false = 10 íconos gratis, true = todos los +60 íconos
   max_landing_pages: number; // Límite de landing pages por plan
+  custom_image_upload?: boolean; // Subir imagen propia de fondo (PRO)
+  image_effects?: boolean; // Filtros y efectos de imagen (PRO)
+  extended_gradients?: boolean; // Colección extendida de gradientes estéticos (PRO)
+  extended_buttons?: boolean; // Colección extendida de estilos de botones (PRO)
 }
 
 export interface Plan {
@@ -35,11 +39,16 @@ export interface Plan {
 }
 
 export interface ThemeConfig {
-  button_style: 'rounded' | 'square' | 'pill' | 'outline' | 'glass' | 'glow' | 'shadow';
+  button_style: 'rounded' | 'square' | 'pill' | 'outline' | 'glass' | 'glow' | 'shadow' | 'gradient_border' | 'cyber_neon' | 'minimal_flat' | string;
   button_bg: string;
   button_text_color: string;
   text_color: string;
-  font_family: 'Inter' | 'Outfit' | 'Poppins' | 'Roboto' | 'Playfair';
+  font_family: string;
+  text_style?: 'normal' | 'bold' | 'italic' | 'bold_italic' | string;
+  text_effect?: 'none' | 'glow' | 'shadow_3d' | 'gradient_text' | 'neon_flicker' | string;
+  gradient_color_start?: string;
+  gradient_color_end?: string;
+  image_filter?: 'none' | 'blur' | 'grayscale' | 'sepia' | 'brightness-dark' | 'contrast-high' | 'hue-rotate' | 'invert' | 'darken' | 'contrast' | 'hue' | 'vignette' | string;
   card_glass: boolean;
   remove_watermark: boolean;
   social_links?: {

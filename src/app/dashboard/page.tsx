@@ -24,7 +24,10 @@ import {
   RefreshCw,
   Globe,
   MessageCircle,
-  Ticket
+  Ticket,
+  Image as ImageIcon,
+  Wand2,
+  Type
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -305,13 +308,16 @@ export default function AdminDashboardPage() {
     }
   }, [landingId]);
 
-  // Upload file (Avatar, Video, or Payment Proof Image)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "video" | "proof") => {
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+
+  // Upload file (Avatar, Video, Payment Proof Image, or Custom Background Image)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "video" | "proof" | "image") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (type === "video") setUploadingVideo(true);
     else if (type === "avatar") setUploadingAvatar(true);
+    else if (type === "image") setUploadingImage(true);
     else setUploadingProof(true);
 
     try {
@@ -335,6 +341,10 @@ export default function AdminDashboardPage() {
           setBackgroundType("video");
           setBackgroundUrl(data.url);
           showToast("✅ Video de fondo subido exitosamente");
+        } else if (type === "image") {
+          setBackgroundType("image");
+          setBackgroundUrl(data.url);
+          showToast("✅ Imagen de fondo subida a CDN R2 exitosamente");
         } else {
           setProofUrl(data.url);
           showToast("✅ Comprobante / Capture de pago subido correctamente");
@@ -345,6 +355,7 @@ export default function AdminDashboardPage() {
     } finally {
       if (type === "video") setUploadingVideo(false);
       else if (type === "avatar") setUploadingAvatar(false);
+      else if (type === "image") setUploadingImage(false);
       else setUploadingProof(false);
     }
   };
@@ -545,7 +556,12 @@ export default function AdminDashboardPage() {
     premium_themes: false,
     custom_fonts: false,
     social_icons: true,
-    max_links: 5
+    max_links: 5,
+    custom_image_upload: false,
+    image_effects: false,
+    extended_gradients: false,
+    extended_buttons: false,
+    max_landing_pages: 1
   };
 
   // Subscription calculation
@@ -997,8 +1013,11 @@ export default function AdminDashboardPage() {
           {/* TAB 3: DISEÑO & MULTIMEDIA */}
           {activeTab === "design" && (
             <div className="glass-panel p-6 rounded-3xl space-y-6 border border-slate-800">
-              <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3">
-                Personalización Visual & Fondo Multimedia
+              <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3 flex items-center justify-between">
+                <span>Personalización Visual & Fondo Multimedia</span>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-normal">
+                  Modo: <strong className={userData?.plan_id === "PAGO" ? "text-amber-400" : "text-indigo-400"}>{userData?.plan_id || "GRATIS"}</strong>
+                </span>
               </h3>
 
               {/* Background Type Picker */}
@@ -1011,22 +1030,34 @@ export default function AdminDashboardPage() {
                     type="button"
                     onClick={() => setBackgroundType("gradient")}
                     className={`p-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition-all ${
-                      backgroundType === "gradient" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400"
+                      backgroundType === "gradient" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
                     }`}
                   >
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
                     <span>Gradiente</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setBackgroundType("color")}
                     className={`p-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition-all ${
-                      backgroundType === "color" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400"
+                      backgroundType === "color" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
                     }`}
                   >
+                    <Palette className="w-4 h-4 text-teal-400" />
                     <span>Color Sólido</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setBackgroundType("image")}
+                    className={`p-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition-all ${
+                      backgroundType === "image" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
+                    }`}
+                  >
+                    <ImageIcon className="w-4 h-4 text-emerald-400" />
+                    <span>Imagen de Fondo</span>
+                  </button>
                   
-                  {/* Video Background Button (Paid Feature Check) */}
+                  {/* Video Background Button (PRO) */}
                   <div className="relative">
                     <button
                       type="button"
@@ -1035,20 +1066,271 @@ export default function AdminDashboardPage() {
                         else showToast("🔒 Los videos de fondo requieren el Plan PAGO PRO.");
                       }}
                       className={`w-full p-3 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition-all ${
-                        backgroundType === "video" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400"
+                        backgroundType === "video" ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
                       }`}
                     >
                       <Video className="w-4 h-4 text-purple-400" />
                       <span>Video Loop</span>
                     </button>
                     {!features.video_background && (
-                      <span className="absolute -top-2 -right-1 px-1.5 py-0.5 rounded bg-amber-500 text-[9px] font-extrabold text-slate-950">
+                      <span className="absolute -top-2 -right-1 px-1.5 py-0.5 rounded bg-amber-500 text-[9px] font-extrabold text-slate-950 shadow">
                         PRO
                       </span>
                     )}
                   </div>
                 </div>
               </div>
+
+              {/* Background Solid Color Picker */}
+              {backgroundType === "color" && (
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Selecciona el Color Sólido de Fondo
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={backgroundUrl.startsWith("#") ? backgroundUrl : "#0f172a"}
+                      onChange={(e) => setBackgroundUrl(e.target.value)}
+                      className="w-12 h-10 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-1"
+                    />
+                    <span className="text-xs font-mono text-slate-300">{backgroundUrl}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Gradient Selector & Custom Color Picker */}
+              {backgroundType === "gradient" && (
+                <div className="space-y-4">
+                  {/* FREE Custom Gradient Color Selector */}
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-300 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-indigo-400" /> Creador de Gradientes con Colores Personalizados (¡Gratis!)
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                        Disponible Gratis
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Color Inicial (Inicio)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={themeConfig.gradient_color_start || "#0f172a"}
+                            onChange={(e) => {
+                              const newStart = e.target.value;
+                              const newEnd = themeConfig.gradient_color_end || "#312e81";
+                              setThemeConfig({ ...themeConfig, gradient_color_start: newStart, gradient_color_end: newEnd });
+                              setBackgroundUrl(`custom:${newStart}:${newEnd}`);
+                            }}
+                            className="w-10 h-8 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5"
+                          />
+                          <span className="text-xs font-mono text-slate-300">{themeConfig.gradient_color_start || "#0f172a"}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Color Final (Destino)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={themeConfig.gradient_color_end || "#312e81"}
+                            onChange={(e) => {
+                              const newEnd = e.target.value;
+                              const newStart = themeConfig.gradient_color_start || "#0f172a";
+                              setThemeConfig({ ...themeConfig, gradient_color_start: newStart, gradient_color_end: newEnd });
+                              setBackgroundUrl(`custom:${newStart}:${newEnd}`);
+                            }}
+                            className="w-10 h-8 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer p-0.5"
+                          />
+                          <span className="text-xs font-mono text-slate-300">{themeConfig.gradient_color_end || "#312e81"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gradient Presets */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      Colección de Gradientes Estéticos
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {/* Basic FREE Gradients */}
+                      {[
+                        { name: "Indigo Noche", value: "from-slate-900 via-indigo-950 to-purple-950", isPro: false },
+                        { name: "Atardecer Neón", value: "from-purple-900 via-pink-900 to-rose-950", isPro: false },
+                        { name: "Bosque Profundo", value: "from-emerald-950 via-teal-950 to-slate-900", isPro: false },
+                        { name: "Cian Eléctrico", value: "from-blue-950 via-cyan-950 to-slate-900", isPro: false },
+                        { name: "Oscuro Minimal", value: "from-slate-950 via-slate-900 to-zinc-950", isPro: false },
+                      ].map((g) => (
+                        <button
+                          key={g.value}
+                          type="button"
+                          onClick={() => setBackgroundUrl(g.value)}
+                          className={`p-3 rounded-xl border text-xs font-medium text-left truncate transition-all ${
+                            backgroundUrl === g.value ? "border-indigo-500 ring-1 ring-indigo-500 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+
+                      {/* Extended PRO Gradients */}
+                      {[
+                        { name: "Vaporwave Sunset", value: "from-pink-600 via-purple-700 to-indigo-900", isPro: true },
+                        { name: "Cyberpunk Violet", value: "from-fuchsia-900 via-violet-950 to-slate-950", isPro: true },
+                        { name: "Golden Luxury", value: "from-amber-900 via-yellow-950 to-stone-950", isPro: true },
+                        { name: "Crimson Fire", value: "from-red-900 via-rose-950 to-slate-950", isPro: true },
+                        { name: "Ocean Depth", value: "from-teal-900 via-blue-950 to-slate-950", isPro: true },
+                      ].map((g) => (
+                        <button
+                          key={g.value}
+                          type="button"
+                          onClick={() => {
+                            if (!features.extended_gradients && g.isPro) {
+                              showToast("🔒 Los gradientes estéticos extendidos requieren el Plan PAGO PRO.");
+                              return;
+                            }
+                            setBackgroundUrl(g.value);
+                          }}
+                          className={`relative p-3 rounded-xl border text-xs font-medium text-left truncate transition-all ${
+                            backgroundUrl === g.value
+                              ? "border-amber-500 ring-1 ring-amber-500 text-white"
+                              : features.extended_gradients || !g.isPro
+                              ? "border-slate-800 text-slate-400 hover:border-slate-700"
+                              : "border-slate-800/60 text-slate-500 bg-slate-950/50 opacity-80"
+                          }`}
+                        >
+                          <span>{g.name}</span>
+                          {g.isPro && (
+                            <span className="absolute top-1 right-1 px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-slate-950">
+                              PRO
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Background Images Section */}
+              {backgroundType === "image" && (
+                <div className="space-y-4">
+                  {/* Preset Images (Gratis) */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Galería de Imágenes Prediseñadas (¡Gratis!)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { name: "Abstracto Oscuro", url: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop" },
+                        { name: "Espacio Cósmico", url: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=1000&auto=format&fit=crop" },
+                        { name: "Luces Neón", url: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop" },
+                        { name: "Noche Estrellada", url: "https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1000&auto=format&fit=crop" },
+                        { name: "Red Cyber", url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop" },
+                        { name: "Atardecer Calmo", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1000&auto=format&fit=crop" },
+                      ].map((img) => (
+                        <button
+                          key={img.url}
+                          type="button"
+                          onClick={() => setBackgroundUrl(img.url)}
+                          className={`relative h-20 rounded-xl overflow-hidden border text-left p-2 flex items-end transition-all group ${
+                            backgroundUrl === img.url ? "border-emerald-500 ring-2 ring-emerald-500" : "border-slate-800 hover:border-slate-700"
+                          }`}
+                        >
+                          <img src={img.url} alt={img.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                          <span className="relative z-10 text-[11px] font-bold text-white drop-shadow">{img.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom Image Upload (PRO) */}
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white flex items-center gap-2">
+                        <Upload className="w-4 h-4 text-amber-400" /> Subir Imagen de Fondo Personalizada (PRO)
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                        PRO
+                      </span>
+                    </div>
+
+                    <label
+                      onClick={(e) => {
+                        if (!features.custom_image_upload) {
+                          e.preventDefault();
+                          showToast("🔒 Subir imágenes de fondo personalizadas requiere el Plan PAGO PRO.");
+                        }
+                      }}
+                      className={`cursor-pointer w-full py-3 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        features.custom_image_upload
+                          ? "bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>{uploadingImage ? "Subiendo imagen a CDN R2..." : "Seleccionar Imagen JPG/PNG (< 5MB)"}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(e) => handleFileUpload(e, "image")}
+                        disabled={uploadingImage || !features.custom_image_upload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  {/* PRO Background Image Filters / Effects */}
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white flex items-center gap-2">
+                        <Wand2 className="w-4 h-4 text-amber-400" /> Filtros de Efectos para Imagen de Fondo (PRO)
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                        PRO
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { key: "none", label: "Sin Filtro", isPro: false },
+                        { key: "blur", label: "Desenfoque", isPro: true },
+                        { key: "grayscale", label: "Blanco & Negro", isPro: true },
+                        { key: "sepia", label: "Sepia Retro", isPro: true },
+                        { key: "brightness-dark", label: "Modo Noche", isPro: true },
+                        { key: "contrast-high", label: "Alto Contraste", isPro: true },
+                        { key: "hue-rotate", label: "Psicodélico", isPro: true },
+                        { key: "invert", label: "Invertido", isPro: true },
+                      ].map((flt) => (
+                        <button
+                          key={flt.key}
+                          type="button"
+                          onClick={() => {
+                            if (flt.isPro && !features.image_effects) {
+                              showToast("🔒 Los filtros de imagen de fondo requieren el Plan PAGO PRO.");
+                              return;
+                            }
+                            setThemeConfig({ ...themeConfig, image_filter: flt.key });
+                          }}
+                          className={`relative p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                            (themeConfig.image_filter || "none") === flt.key
+                              ? "border-amber-500 bg-amber-500/10 text-white"
+                              : "border-slate-800 text-slate-400 hover:border-slate-700"
+                          }`}
+                        >
+                          <span>{flt.label}</span>
+                          {flt.isPro && (
+                            <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-bold">PRO</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Background Video Uploader to R2 */}
               {backgroundType === "video" && (
@@ -1072,61 +1354,186 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* Gradient Selector Presets */}
-              {backgroundType === "gradient" && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-2">
-                    Colección de Gradientes Estéticos
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {[
-                      { name: "Indigo Noche", value: "from-slate-900 via-indigo-950 to-purple-950" },
-                      { name: "Atardecer Neón", value: "from-purple-900 via-pink-900 to-rose-950" },
-                      { name: "Bosque Profundo", value: "from-emerald-950 via-teal-950 to-slate-900" },
-                      { name: "Cian Eléctrico", value: "from-blue-950 via-cyan-950 to-slate-900" },
-                      { name: "Oscuro Minimal", value: "from-slate-950 via-slate-900 to-zinc-950" },
-                    ].map((g) => (
-                      <button
-                        key={g.value}
-                        type="button"
-                        onClick={() => setBackgroundUrl(g.value)}
-                        className={`p-3 rounded-xl border text-xs font-medium text-left truncate transition-all ${
-                          backgroundUrl === g.value ? "border-indigo-500 ring-1 ring-indigo-500 text-white" : "border-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {g.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Button Style Picker */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Estilo de Botones
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {/* Gratis Basic Button Styles */}
                   {[
-                    { key: "rounded", label: "Redondeado" },
-                    { key: "pill", label: "Píldora" },
-                    { key: "glass", label: "Cristal Glass" },
-                    { key: "outline", label: "Contorno" },
-                    { key: "glow", label: "Brillo Neón" },
-                    { key: "shadow", label: "Sombra 3D" },
-                    { key: "square", label: "Cuadrado" },
+                    { key: "rounded", label: "Redondeado", isPro: false },
+                    { key: "pill", label: "Píldora", isPro: false },
+                    { key: "glass", label: "Cristal Glass", isPro: false },
+                    { key: "outline", label: "Contorno", isPro: false },
                   ].map((st) => (
                     <button
                       key={st.key}
                       type="button"
                       onClick={() => setThemeConfig({ ...themeConfig, button_style: st.key as any })}
                       className={`p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        themeConfig.button_style === st.key ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400"
+                        themeConfig.button_style === st.key ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
                       }`}
                     >
                       {st.label}
                     </button>
                   ))}
+
+                  {/* PRO Extended Button Styles */}
+                  {[
+                    { key: "glow", label: "Brillo Neón", isPro: true },
+                    { key: "shadow", label: "Sombra 3D", isPro: true },
+                    { key: "square", label: "Cuadrado", isPro: true },
+                    { key: "gradient_border", label: "Borde Gradiente", isPro: true },
+                    { key: "cyber_neon", label: "Cyberpunk", isPro: true },
+                    { key: "minimal_flat", label: "Plano Minimal", isPro: true },
+                  ].map((st) => (
+                    <button
+                      key={st.key}
+                      type="button"
+                      onClick={() => {
+                        if (!features.extended_buttons && st.isPro) {
+                          showToast("🔒 Los estilos de botones avanzados requieren el Plan PAGO PRO.");
+                          return;
+                        }
+                        setThemeConfig({ ...themeConfig, button_style: st.key as any });
+                      }}
+                      className={`relative p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                        themeConfig.button_style === st.key
+                          ? "border-amber-500 bg-amber-500/10 text-white"
+                          : features.extended_buttons || !st.isPro
+                          ? "border-slate-800 text-slate-400 hover:border-slate-700"
+                          : "border-slate-800/60 text-slate-500 bg-slate-950/50"
+                      }`}
+                    >
+                      <span>{st.label}</span>
+                      {st.isPro && (
+                        <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-bold">PRO</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Typography, Formatting & Text Effects Section */}
+              <div className="pt-4 border-t border-slate-800 space-y-4">
+                <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                  <Type className="w-4 h-4 text-indigo-400" /> Estilos de Texto & Tipografía
+                </h4>
+
+                {/* FREE Formatting (Cursiva y Negrita) */}
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300">
+                      Formato Básico de Texto (Negrita & Cursiva)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      Gratis
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { key: "normal", label: "Normal", class: "font-normal" },
+                      { key: "bold", label: "Negrita (B)", class: "font-bold" },
+                      { key: "italic", label: "Cursiva (I)", class: "italic" },
+                      { key: "bold_italic", label: "Negrita Cursiva (B+I)", class: "font-bold italic" },
+                    ].map((f) => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setThemeConfig({ ...themeConfig, text_style: f.key })}
+                        className={`p-2.5 rounded-xl border text-xs ${f.class} transition-all ${
+                          (themeConfig.text_style || "normal") === f.key
+                            ? "border-indigo-500 bg-indigo-500/10 text-white"
+                            : "border-slate-800 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PRO Google Fonts */}
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Fuentes Tipográficas Google Fonts (PRO)
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                      PRO
+                    </span>
+                  </div>
+
+                  <select
+                    value={themeConfig.font_family || "default"}
+                    onChange={(e) => {
+                      if (!features.custom_fonts && e.target.value !== "default") {
+                        showToast("🔒 Cambiar fuentes tipográficas requiere el Plan PAGO PRO.");
+                        return;
+                      }
+                      setThemeConfig({ ...themeConfig, font_family: e.target.value });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="default">Fuente Predeterminada (Sistema)</option>
+                    <option value="Inter">Inter (Moderna & Limpia)</option>
+                    <option value="Outfit">Outfit (Moderna Tech)</option>
+                    <option value="Roboto">Roboto (Clásica)</option>
+                    <option value="Montserrat">Montserrat (Geométrica)</option>
+                    <option value="Poppins">Poppins (Redondeada Popular)</option>
+                    <option value="Playfair Display">Playfair Display (Elegante / Editorial)</option>
+                    <option value="Cinzel">Cinzel (Lujo / Clásica Romana)</option>
+                    <option value="Space Grotesk">Space Grotesk (Futurista / Tech)</option>
+                    <option value="Dancing Script">Dancing Script (Manuscrita / Cursiva)</option>
+                    <option value="Permanent Marker">Permanent Marker (Urbana / Marcador)</option>
+                    <option value="Fira Code">Fira Code (Código / Developer)</option>
+                  </select>
+                </div>
+
+                {/* PRO Text Visual Effects */}
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Efectos Visuales de Texto (PRO)
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                      PRO
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { key: "none", label: "Sin Efecto", isPro: false },
+                      { key: "glow", label: "Resplandor Neón", isPro: true },
+                      { key: "shadow_3d", label: "Sombra 3D", isPro: true },
+                      { key: "gradient_text", label: "Texto Gradiente", isPro: true },
+                      { key: "neon_flicker", label: "Parpadeo Neón", isPro: true },
+                    ].map((eff) => (
+                      <button
+                        key={eff.key}
+                        type="button"
+                        onClick={() => {
+                          if (eff.isPro && !features.custom_fonts) {
+                            showToast("🔒 Los efectos visuales de texto requieren el Plan PAGO PRO.");
+                            return;
+                          }
+                          setThemeConfig({ ...themeConfig, text_effect: eff.key });
+                        }}
+                        className={`relative p-2.5 rounded-xl border text-xs font-medium transition-all ${
+                          (themeConfig.text_effect || "none") === eff.key
+                            ? "border-amber-500 bg-amber-500/10 text-white"
+                            : "border-slate-800 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        <span>{eff.label}</span>
+                        {eff.isPro && (
+                          <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-bold">PRO</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

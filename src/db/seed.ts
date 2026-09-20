@@ -138,7 +138,11 @@ async function seed() {
       social_icons: true,
       max_links: 5,
       all_icons: false,
-      max_landing_pages: 1
+      max_landing_pages: 1,
+      custom_image_upload: false,
+      image_effects: false,
+      extended_gradients: false,
+      extended_buttons: false
     };
 
     const pagoFeatures: PlanFeatures = {
@@ -150,7 +154,11 @@ async function seed() {
       social_icons: true,
       max_links: 999,
       all_icons: true,
-      max_landing_pages: 999
+      max_landing_pages: 999,
+      custom_image_upload: true,
+      image_effects: true,
+      extended_gradients: true,
+      extended_buttons: true
     };
 
     // Upsert GRATIS plan
