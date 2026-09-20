@@ -1,64 +1,61 @@
 import { NextResponse } from "next/server";
 import { dbClient } from "@/db";
 
-// Temporary diagnostic endpoint — test users query directly
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
-    // Test 1: Simple count
-    const countRes = await dbClient.execute({
-      sql: "SELECT COUNT(*) as cnt FROM users",
-      args: []
-    });
-
-    // Test 2: List all users
     const usersRes = await dbClient.execute({
-      sql: "SELECT id, email, name, role, plan_id, created_at FROM users ORDER BY created_at DESC",
+      sql: `SELECT u.id, u.email, u.name, u.role, u.plan_id, u.created_at,
+                   u.subscription_started_at, u.subscription_expires_at,
+                   (SELECT slug FROM landing_pages lp WHERE lp.user_id = u.id ORDER BY lp.created_at DESC LIMIT 1) as slug 
+            FROM users u
+            ORDER BY u.created_at DESC`,
       args: []
     });
 
-    // Test 3: Test the subquery for slug
-    let slugTest = "not tested";
-    try {
-      const slugRes = await dbClient.execute({
-        sql: `SELECT u.id, u.email,
-              (SELECT slug FROM landing_pages lp WHERE lp.user_id = u.id LIMIT 1) as slug
-              FROM users u`,
-        args: []
-      });
-      slugTest = JSON.stringify(slugRes.rows);
-    } catch (e: any) {
-      slugTest = `ERROR: ${e?.message}`;
-    }
+    let totalUsersCount = usersRes.rows.length;
+    let paidUsersCount = 0;
+    let freeUsersCount = 0;
 
-    // Test 4: Check landing_pages table
-    const lpRes = await dbClient.execute({
-      sql: "SELECT COUNT(*) as cnt FROM landing_pages",
-      args: []
+    const usersWithSubscription = usersRes.rows.map(user => {
+      let remainingDays = 0;
+      let isExpired = false;
+
+      const rawPlan = (user.plan_id as string || "").toUpperCase();
+      const planId = rawPlan === "PAGO" ? "PAGO" : "GRATIS";
+
+      if (planId === "PAGO") {
+        paidUsersCount++;
+        if (user.subscription_expires_at) {
+          const expiresAt = new Date(user.subscription_expires_at as string).getTime();
+          const now = Date.now();
+          const diffMs = expiresAt - now;
+          remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+          if (diffMs <= 0) isExpired = true;
+        }
+      } else {
+        freeUsersCount++;
+      }
+
+      return {
+        ...user,
+        plan_id: planId,
+        remaining_days: remainingDays,
+        is_subscription_expired: isExpired
+      };
     });
-
-    // Test 5: Check payments table
-    let paymentsCount = "not tested";
-    try {
-      const pRes = await dbClient.execute({
-        sql: "SELECT COUNT(*) as cnt FROM payments",
-        args: []
-      });
-      paymentsCount = String(pRes.rows[0]?.cnt);
-    } catch (e: any) {
-      paymentsCount = `ERROR: ${e?.message}`;
-    }
 
     return NextResponse.json({
-      user_count: countRes.rows[0]?.cnt,
-      users: usersRes.rows,
-      slug_test: slugTest,
-      landing_pages_count: lpRes.rows[0]?.cnt,
-      payments_count: paymentsCount,
+      success: true,
+      users: usersWithSubscription,
+      stats: {
+        total_users: totalUsersCount,
+        paid_users: paidUsersCount,
+        free_users: freeUsersCount,
+      }
     });
   } catch (error: any) {
-    return NextResponse.json({
-      error: error?.message || "Unknown error",
-      stack: error?.stack?.substring(0, 500)
-    }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Error al obtener usuarios" }, { status: 500 });
   }
 }
