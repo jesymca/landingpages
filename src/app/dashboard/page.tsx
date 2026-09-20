@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PhonePreview } from "@/components/PhonePreview";
 import { ThemeConfig, LinkItem, PlanFeatures } from "@/db/schema";
+import { IconSelectorModal, RenderIcon, MASTER_ICONS } from "@/components/IconCatalog";
 import {
   User,
   Link as LinkIcon,
@@ -64,6 +65,10 @@ export default function AdminDashboardPage() {
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkIcon, setNewLinkIcon] = useState("globe");
+
+  // Icon Modal State
+  const [isIconModalOpen, setIsIconModalOpen] = useState(false);
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
 
   // Payment Form State
   const [bcvRate, setBcvRate] = useState<number>(36.5);
@@ -229,11 +234,44 @@ export default function AdminDashboardPage() {
         setLinks([...links, data.link]);
         setNewLinkTitle("");
         setNewLinkUrl("");
+        setNewLinkIcon("globe");
         showToast("✅ Enlace añadido exitosamente");
       }
     } catch (err: any) {
       showToast("❌ Error al añadir enlace");
     }
+  };
+
+  // Update Icon of existing Link
+  const handleUpdateLinkIcon = async (linkId: string, iconId: string) => {
+    try {
+      const updatedLinks = links.map(l => l.id === linkId ? { ...l, icon: iconId } : l);
+      setLinks(updatedLinks);
+
+      await fetch("/api/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: linkId, icon: iconId })
+      });
+      showToast("✅ Ícono del enlace actualizado");
+    } catch (err) {
+      console.error(err);
+      showToast("❌ Error al actualizar el ícono");
+    }
+  };
+
+  // Select Icon from Modal
+  const handleSelectIconModal = (selectedIconId: string) => {
+    if (editingLinkId) {
+      handleUpdateLinkIcon(editingLinkId, selectedIconId);
+      setEditingLinkId(null);
+    } else {
+      setNewLinkIcon(selectedIconId);
+    }
+  };
+
+  const handleRequireUpgrade = (iconName: string) => {
+    showToast(`🔒 El ícono '${iconName}' requiere el Plan PAGO PRO. ¡Actualiza tu plan por solo $4.99/mes en la pestaña Plan & Pagos!`);
   };
 
   // Toggle or Edit Link
@@ -530,29 +568,67 @@ export default function AdminDashboardPage() {
 
                 <form onSubmit={handleAddLink} className="space-y-3">
                   <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Título del Enlace
+                    </label>
                     <input
                       type="text"
                       required
                       value={newLinkTitle}
                       onChange={(e) => setNewLinkTitle(e.target.value)}
-                      placeholder="Título del Enlace (Ej: Mi Canal de YouTube)"
+                      placeholder="Ej: Mi Instagram / Mi Canal de YouTube / Mi WhatsApp"
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
+
                   <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      URL de Destino
+                    </label>
                     <input
                       type="url"
                       required
                       value={newLinkUrl}
                       onChange={(e) => setNewLinkUrl(e.target.value)}
-                      placeholder="URL de Destino (https://...)"
+                      placeholder="https://..."
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Ícono Característico
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLinkId(null);
+                        setIsIconModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 hover:border-indigo-500 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
+                          <RenderIcon iconId={newLinkIcon} className="w-4 h-4" />
+                        </div>
+                        <span className="font-semibold text-white">
+                          {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.name || "Sitio Web"}
+                        </span>
+                        {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.isPro && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500 text-[9px] font-extrabold text-slate-950">
+                            PRO
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-indigo-400 font-bold group-hover:underline">
+                        Cambiar Ícono (+60 Disponibles) →
+                      </span>
+                    </button>
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30"
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 mt-2"
                   >
                     <Plus className="w-4 h-4" /> Añadir Enlace
                   </button>
@@ -570,8 +646,26 @@ export default function AdminDashboardPage() {
                     key={link.id}
                     className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between gap-4"
                   >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLinkId(link.id);
+                        setIsIconModalOpen(true);
+                      }}
+                      className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 flex items-center justify-center text-indigo-400 shrink-0 transition-all group relative"
+                      title="Hacer clic para cambiar ícono"
+                    >
+                      <RenderIcon iconId={link.icon || "globe"} className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-indigo-600 text-[9px] text-white flex items-center justify-center font-bold shadow">
+                        ✎
+                      </span>
+                    </button>
+
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{link.title}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-white truncate">{link.title}</p>
+                        <span className="text-[10px] text-slate-500 font-mono">({link.icon || "globe"})</span>
+                      </div>
                       <p className="text-[11px] text-slate-400 truncate font-mono">{link.url}</p>
                     </div>
 
@@ -883,6 +977,19 @@ export default function AdminDashboardPage() {
         </div>
 
       </div>
+
+      {/* Icon Selector Modal */}
+      <IconSelectorModal
+        isOpen={isIconModalOpen}
+        onClose={() => {
+          setIsIconModalOpen(false);
+          setEditingLinkId(null);
+        }}
+        selectedIcon={editingLinkId ? (links.find(l => l.id === editingLinkId)?.icon || "globe") : newLinkIcon}
+        onSelectIcon={handleSelectIconModal}
+        userPlan={userData?.plan_id || "GRATIS"}
+        onRequireUpgrade={handleRequireUpgrade}
+      />
     </div>
   );
 }

@@ -210,7 +210,11 @@ export function PhonePreview({
                     style={extraStyles}
                     className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} shadow-md`}
                   >
-                    <span className="truncate w-full text-center">{link.title}</span>
+                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                      <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
+                    </div>
+                    <span className="truncate w-full text-center px-2">{link.title}</span>
+                    <div className="w-5 h-5 shrink-0" />
                   </a>
                 ))
             ) : (

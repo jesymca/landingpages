@@ -271,7 +271,11 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
                 style={extraStyles}
                 className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} border border-white/10`}
               >
-                <span className="truncate w-full text-center">{link.title}</span>
+                <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                  <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
+                </div>
+                <span className="truncate w-full text-center px-2">{link.title}</span>
+                <div className="w-6 h-6 shrink-0" />
               </a>
             ))}
           </div>
