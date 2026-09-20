@@ -34,9 +34,13 @@ export async function GET() {
       const rawPlan = (user.plan_id as string || "").toUpperCase();
       const planId = rawPlan === "PAGO" ? "PAGO" : "GRATIS";
 
+      let isUnlimited = false;
       if (planId === "PAGO") {
         paidUsersCount++;
-        if (user.subscription_expires_at) {
+        if (!user.subscription_expires_at) {
+          isUnlimited = true;
+          remainingDays = 9999;
+        } else {
           const expiresAt = new Date(user.subscription_expires_at as string).getTime();
           const now = Date.now();
           const diffMs = expiresAt - now;
@@ -51,6 +55,7 @@ export async function GET() {
         ...user,
         plan_id: planId,
         remaining_days: remainingDays,
+        is_unlimited: isUnlimited,
         is_subscription_expired: isExpired
       };
     });

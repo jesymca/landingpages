@@ -47,6 +47,34 @@ export async function ensurePaymentColumns() {
     await client.execute("ALTER TABLE payments ADD COLUMN months_paid INTEGER DEFAULT 1").catch(() => {});
     await client.execute("ALTER TABLE landing_pages ADD COLUMN is_disabled INTEGER DEFAULT 0").catch(() => {});
     await client.execute("ALTER TABLE landing_pages ADD COLUMN disabled_reason TEXT").catch(() => {});
+
+    // Ensure PAGO plan in database has all feature flags set to true
+    const pagoRes = await client.execute("SELECT features_json FROM plans WHERE id = 'PAGO'").catch(() => null);
+    if (pagoRes && pagoRes.rows.length > 0) {
+      const feat = JSON.parse((pagoRes.rows[0].features_json as string) || "{}");
+      if (!feat.extended_gradients || !feat.extended_buttons || !feat.custom_image_upload || !feat.image_effects) {
+        const fullProFeatures = {
+          video_background: true,
+          remove_watermark: true,
+          unlimited_links: true,
+          premium_themes: true,
+          custom_fonts: true,
+          social_icons: true,
+          max_links: 999,
+          all_icons: true,
+          max_landing_pages: 999,
+          custom_image_upload: true,
+          image_effects: true,
+          extended_gradients: true,
+          extended_buttons: true,
+          ...feat
+        };
+        await client.execute({
+          sql: "UPDATE plans SET features_json = ? WHERE id = 'PAGO'",
+          args: [JSON.stringify(fullProFeatures)]
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
     // Ignore errors if columns already exist
   }

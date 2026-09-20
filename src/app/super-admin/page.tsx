@@ -915,12 +915,16 @@ export default function SuperAdminDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {users.map((u) => {
-                    const remainingDays = u.remaining_days || 0;
-                    const percent = Math.min(100, Math.max(0, Math.round((remainingDays / 30) * 100)));
+                    const isUnlimited = Boolean(u.is_unlimited || (u.plan_id === "PAGO" && !u.subscription_expires_at));
+                    const isExpired = Boolean(u.is_subscription_expired);
+                    const remainingDays = isUnlimited ? 9999 : (u.remaining_days || 0);
+                    const percent = isUnlimited ? 100 : Math.min(100, Math.max(0, Math.round((remainingDays / 30) * 100)));
 
                     let progressColor = "from-emerald-500 to-teal-500";
-                    if (remainingDays <= 10) progressColor = "from-amber-500 to-orange-500";
-                    if (remainingDays <= 3) progressColor = "from-rose-500 to-red-600";
+                    if (!isUnlimited) {
+                      if (remainingDays <= 10) progressColor = "from-amber-500 to-orange-500";
+                      if (remainingDays <= 3 || isExpired) progressColor = "from-rose-500 to-red-600";
+                    }
 
                     return (
                       <tr key={u.id} className="hover:bg-slate-900/50">
@@ -933,19 +937,33 @@ export default function SuperAdminDashboardPage() {
                         </td>
                         <td className="p-3">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                            u.plan_id === "PAGO" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-slate-800 text-slate-400"
+                            u.plan_id === "PAGO"
+                              ? isExpired
+                                ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : "bg-slate-800 text-slate-400"
                           }`}>
-                            {u.plan_id === "PAGO" ? "PAGO PRO" : "GRATIS"}
+                            {u.plan_id === "PAGO"
+                              ? isUnlimited
+                                ? "PRO ILIMITADO"
+                                : isExpired
+                                ? "PRO EXPIRADO"
+                                : "PAGO PRO"
+                              : "GRATIS"}
                           </span>
                         </td>
                         <td className="p-3">
                           {u.plan_id === "PAGO" ? (
                             <div className="space-y-1">
                               <div className="flex items-center justify-between text-[11px]">
-                                <span className="font-bold text-slate-200">
-                                  {remainingDays > 0 ? `${remainingDays} días restantes` : "Suscripción Expirada"}
+                                <span className={`font-bold ${isExpired ? "text-rose-400" : "text-emerald-300"}`}>
+                                  {isUnlimited
+                                    ? "PRO Ilimitado (De Por Vida)"
+                                    : isExpired
+                                    ? "Suscripción Expirada"
+                                    : `${remainingDays} días restantes`}
                                 </span>
-                                <span className="font-mono text-slate-400">{percent}%</span>
+                                <span className="font-mono text-slate-400">{isUnlimited ? "∞" : `${percent}%`}</span>
                               </div>
                               <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700">
                                 <div
