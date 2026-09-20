@@ -10,41 +10,45 @@ export async function GET() {
       return NextResponse.json({ error: "Acceso denegado. Se requiere rol de SUPER_ADMIN." }, { status: 403 });
     }
 
+    // Subquery for slug guarantees every user appears EXACTLY ONCE
     const usersRes = await dbClient.execute({
       sql: `SELECT u.id, u.email, u.name, u.role, u.plan_id, u.created_at,
-                   u.subscription_started_at, u.subscription_expires_at, lp.slug 
+                   u.subscription_started_at, u.subscription_expires_at,
+                   (SELECT slug FROM landing_pages lp WHERE lp.user_id = u.id ORDER BY lp.created_at DESC LIMIT 1) as slug 
             FROM users u
-            LEFT JOIN landing_pages lp ON u.id = lp.user_id
             ORDER BY u.created_at DESC`,
       args: []
     });
 
-    const statsRes = await dbClient.execute({
-      sql: `SELECT 
-              COUNT(*) as total_users,
-              SUM(CASE WHEN plan_id = 'PAGO' THEN 1 ELSE 0 END) as paid_users,
-              SUM(CASE WHEN plan_id = 'GRATIS' THEN 1 ELSE 0 END) as free_users
-            FROM users`,
-      args: []
-    });
+    let totalUsersCount = usersRes.rows.length;
+    let paidUsersCount = 0;
+    let freeUsersCount = 0;
 
-    const stats = statsRes.rows[0];
-
-    // Calculate subscription remaining days for each user
+    // Calculate subscription remaining days and stats for each user
     const usersWithSubscription = usersRes.rows.map(user => {
       let remainingDays = 0;
       let isExpired = false;
 
-      if (user.plan_id === "PAGO" && user.subscription_expires_at) {
-        const expiresAt = new Date(user.subscription_expires_at as string).getTime();
-        const now = Date.now();
-        const diffMs = expiresAt - now;
-        remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-        if (diffMs <= 0) isExpired = true;
+      // Normalize plan_id (default to GRATIS if null/empty)
+      const rawPlan = (user.plan_id as string || "").toUpperCase();
+      const planId = rawPlan === "PAGO" ? "PAGO" : "GRATIS";
+
+      if (planId === "PAGO") {
+        paidUsersCount++;
+        if (user.subscription_expires_at) {
+          const expiresAt = new Date(user.subscription_expires_at as string).getTime();
+          const now = Date.now();
+          const diffMs = expiresAt - now;
+          remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+          if (diffMs <= 0) isExpired = true;
+        }
+      } else {
+        freeUsersCount++;
       }
 
       return {
         ...user,
+        plan_id: planId,
         remaining_days: remainingDays,
         is_subscription_expired: isExpired
       };
@@ -54,9 +58,9 @@ export async function GET() {
       success: true,
       users: usersWithSubscription,
       stats: {
-        total_users: Number(stats.total_users || 0),
-        paid_users: Number(stats.paid_users || 0),
-        free_users: Number(stats.free_users || 0),
+        total_users: totalUsersCount,
+        paid_users: paidUsersCount,
+        free_users: freeUsersCount,
       }
     });
   } catch (error: any) {
