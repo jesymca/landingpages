@@ -23,7 +23,8 @@ import {
   Trash2,
   Clock,
   Check,
-  AlertCircle
+  AlertCircle,
+  Percent
 } from "lucide-react";
 import { PlanFeatures } from "@/db/schema";
 
@@ -45,6 +46,10 @@ export default function SuperAdminDashboardPage() {
   const [bcvRate, setBcvRate] = useState<number>(36.5);
   const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Multi-month Discounts State
+  const [discounts, setDiscounts] = useState<any>({ "2": 5, "3": 10, "6": 15, "12": 20 });
+  const [savingDiscounts, setSavingDiscounts] = useState(false);
 
   // New Payment Method Form state
   const [newMethodName, setNewMethodName] = useState("");
@@ -77,13 +82,14 @@ export default function SuperAdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resPlans, resUsers, resPayments, resMethods, resBanks, resBcv] = await Promise.all([
+      const [resPlans, resUsers, resPayments, resMethods, resBanks, resBcv, resDiscounts] = await Promise.all([
         fetch("/api/super-admin/plans"),
         fetch("/api/super-admin/users"),
         fetch("/api/super-admin/payments"),
         fetch("/api/super-admin/payment-methods"),
         fetch("/api/banks?all=true"),
-        fetch("/api/bcv")
+        fetch("/api/bcv"),
+        fetch("/api/super-admin/discounts")
       ]);
 
       if (resPlans.ok) {
@@ -116,6 +122,11 @@ export default function SuperAdminDashboardPage() {
         const bcv = await resBcv.json();
         if (bcv.rate) setBcvRate(bcv.rate);
       }
+
+      if (resDiscounts.ok) {
+        const dData = await resDiscounts.json();
+        if (dData.discounts) setDiscounts(dData.discounts);
+      }
     } catch (err) {
       console.error("Error loading super admin data:", err);
     } finally {
@@ -136,6 +147,27 @@ export default function SuperAdminDashboardPage() {
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  const handleSaveDiscounts = async () => {
+    try {
+      setSavingDiscounts(true);
+      const res = await fetch("/api/super-admin/discounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discounts })
+      });
+      if (res.ok) {
+        showToast("✅ Descuentos multimes guardados correctamente");
+      } else {
+        showToast("❌ Error al guardar los descuentos");
+      }
+    } catch (err) {
+      console.error("Error saving discounts:", err);
+      showToast("❌ Error al guardar los descuentos");
+    } finally {
+      setSavingDiscounts(false);
+    }
   };
 
   // Toggle feature flag in plan feature matrix
@@ -1085,6 +1117,90 @@ export default function SuperAdminDashboardPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Configuración de Descuentos Multimes */}
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Percent className="w-5 h-5 text-emerald-400" /> Descuentos por Suscripción Multimes (%)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Configura los porcentajes de descuento aplicados automáticamente al pagar 2, 3, 6 o 12 meses por adelantado.
+                  </p>
+                </div>
+                <button
+                  onClick={handleSaveDiscounts}
+                  disabled={savingDiscounts}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shrink-0"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingDiscounts ? "Guardando..." : "Guardar Descuentos"}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">2 Meses (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discounts["2"] ?? 5}
+                      onChange={(e) => setDiscounts({ ...discounts, "2": parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white pr-8 font-mono"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-bold">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">3 Meses (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discounts["3"] ?? 10}
+                      onChange={(e) => setDiscounts({ ...discounts, "3": parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white pr-8 font-mono"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-bold">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">6 Meses (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discounts["6"] ?? 15}
+                      onChange={(e) => setDiscounts({ ...discounts, "6": parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white pr-8 font-mono"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-bold">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">12 Meses / 1 Año (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discounts["12"] ?? 20}
+                      onChange={(e) => setDiscounts({ ...discounts, "12": parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white pr-8 font-mono"
+                    />
+                    <span className="absolute right-3 top-2 text-xs text-slate-500 font-bold">%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

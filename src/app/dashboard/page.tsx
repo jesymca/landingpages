@@ -94,6 +94,7 @@ export default function AdminDashboardPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
   const [uploadingVideo, setUploadingVideo] = useState<boolean>(false);
   const [userPayments, setUserPayments] = useState<any[]>([]);
+  const [discounts, setDiscounts] = useState<any>({ "1": 0, "2": 5, "3": 10, "6": 15, "12": 20 });
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -104,12 +105,13 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resLanding, resBcv, resMethods, resBanks, resUserPayments] = await Promise.all([
+      const [resLanding, resBcv, resMethods, resBanks, resUserPayments, resDiscounts] = await Promise.all([
         fetch("/api/landing"),
         fetch("/api/bcv"),
         fetch("/api/super-admin/payment-methods"),
         fetch("/api/banks"),
-        fetch("/api/payments")
+        fetch("/api/payments"),
+        fetch("/api/super-admin/discounts")
       ]);
 
       if (resLanding.ok) {
@@ -157,6 +159,11 @@ export default function AdminDashboardPage() {
       if (resUserPayments.ok) {
         const payData = await resUserPayments.json();
         setUserPayments(payData.payments || []);
+      }
+
+      if (resDiscounts.ok) {
+        const dData = await resDiscounts.json();
+        if (dData.discounts) setDiscounts(dData.discounts);
       }
     } catch (err) {
       console.error("Error loading dashboard data:", err);
@@ -349,7 +356,9 @@ export default function AdminDashboardPage() {
 
     const selectedPm = paymentMethods.find(pm => pm.id === selectedMethodId);
     const planPrice = planData?.price_usd || 4.99;
-    const amountUsd = Number((planPrice * monthsPaid).toFixed(2));
+    const baseUsd = planPrice * monthsPaid;
+    const discountPercent = discounts[monthsPaid.toString()] || 0;
+    const amountUsd = Number((baseUsd * (1 - discountPercent / 100)).toFixed(2));
     const amountVes = Number((amountUsd * bcvRate).toFixed(2));
 
     setSubmittingPayment(true);
@@ -1077,41 +1086,75 @@ export default function AdminDashboardPage() {
                       { months: 3, label: "3 Meses", days: "90 Días" },
                       { months: 6, label: "6 Meses", days: "180 Días" },
                       { months: 12, label: "1 Año", days: "360 Días" }
-                    ].map(opt => (
-                      <button
-                        key={opt.months}
-                        type="button"
-                        onClick={() => setMonthsPaid(opt.months)}
-                        className={`p-2.5 rounded-xl border text-xs text-center transition-all ${
-                          monthsPaid === opt.months
-                            ? "bg-amber-500 text-slate-950 font-black border-amber-400 shadow-md"
-                            : "bg-slate-950/80 text-slate-300 border-slate-800 hover:border-slate-700"
-                        }`}
-                      >
-                        <div className="font-bold">{opt.label}</div>
-                        <div className="text-[10px] opacity-80">{opt.days}</div>
-                      </button>
-                    ))}
+                    ].map(opt => {
+                      const discount = discounts[opt.months.toString()] || 0;
+                      return (
+                        <button
+                          key={opt.months}
+                          type="button"
+                          onClick={() => setMonthsPaid(opt.months)}
+                          className={`relative p-2.5 rounded-xl border text-xs text-center transition-all ${
+                            monthsPaid === opt.months
+                              ? "bg-amber-500 text-slate-950 font-black border-amber-400 shadow-md"
+                              : "bg-slate-950/80 text-slate-300 border-slate-800 hover:border-slate-700"
+                          }`}
+                        >
+                          {discount > 0 && (
+                            <span className={`absolute -top-2 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold shadow ${
+                              monthsPaid === opt.months ? "bg-slate-950 text-amber-400" : "bg-emerald-500 text-slate-950"
+                            }`}>
+                              -{discount}%
+                            </span>
+                          )}
+                          <div className="font-bold">{opt.label}</div>
+                          <div className="text-[10px] opacity-80">{opt.days}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Price Conversion Box */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-slate-400">Total USD ({monthsPaid} mes/es):</span>
-                    <p className="text-2xl font-black text-white">
-                      ${((planData?.price_usd || 4.99) * monthsPaid).toFixed(2)}{" "}
-                      <span className="text-xs font-normal text-slate-400">/ {monthsPaid * 30} días</span>
-                    </p>
-                  </div>
+                {(() => {
+                  const planPrice = planData?.price_usd || 4.99;
+                  const baseUsd = planPrice * monthsPaid;
+                  const discountPercent = discounts[monthsPaid.toString()] || 0;
+                  const finalUsd = baseUsd * (1 - discountPercent / 100);
+                  const finalVes = finalUsd * bcvRate;
 
-                  <div className="text-right">
-                    <span className="text-xs text-amber-400 font-semibold">Tasa Oficial BCV: {bcvRate.toFixed(2)} Bs</span>
-                    <p className="text-xl font-extrabold text-emerald-400">
-                      {(((planData?.price_usd || 4.99) * monthsPaid) * bcvRate).toFixed(2)} Bs.
-                    </p>
-                  </div>
-                </div>
+                  return (
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">Total USD ({monthsPaid} mes/es):</span>
+                          {discountPercent > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30">
+                              ¡Ahorras {discountPercent}%!
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <p className="text-2xl font-black text-white">
+                            ${finalUsd.toFixed(2)}{" "}
+                            <span className="text-xs font-normal text-slate-400">/ {monthsPaid * 30} días</span>
+                          </p>
+                          {discountPercent > 0 && (
+                            <span className="text-xs text-slate-500 line-through font-semibold">
+                              ${baseUsd.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs text-amber-400 font-semibold">Tasa Oficial BCV: {bcvRate.toFixed(2)} Bs</span>
+                        <p className="text-xl font-extrabold text-emerald-400">
+                          {finalVes.toFixed(2)} Bs.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Step 1: Select Payment Method */}
                 <form onSubmit={handleSubmitPayment} className="space-y-4 pt-2">
