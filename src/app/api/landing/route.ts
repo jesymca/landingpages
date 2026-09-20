@@ -36,14 +36,16 @@ export async function GET(req: Request) {
       features_json: JSON.parse(planRes.rows[0].features_json as string)
     } : null;
 
-    // Fetch landing page
-    let landingRes = await dbClient.execute({
-      sql: "SELECT * FROM landing_pages WHERE user_id = ?",
+    // Fetch landing pages
+    let landingsRes = await dbClient.execute({
+      sql: "SELECT * FROM landing_pages WHERE user_id = ? ORDER BY created_at ASC",
       args: [userId]
     });
 
+    let landings: any[] = [];
     let landing: any;
-    if (landingRes.rows.length === 0) {
+
+    if (landingsRes.rows.length === 0) {
       // Create one automatically if missing
       const landingId = `land_${Date.now()}`;
       const slug = (session.user.name || "user").toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.floor(Math.random() * 1000);
@@ -75,14 +77,24 @@ export async function GET(req: Request) {
         background_url: "from-slate-900 via-indigo-950 to-slate-900",
         theme_config_json: defaultTheme
       };
+      landings = [landing];
     } else {
-      landing = {
-        ...landingRes.rows[0],
-        theme_config_json: JSON.parse(landingRes.rows[0].theme_config_json as string)
-      };
+      landings = landingsRes.rows.map(row => ({
+        ...row,
+        theme_config_json: JSON.parse(row.theme_config_json as string)
+      }));
+      
+      const url = new URL(req.url);
+      const requestedId = url.searchParams.get("id");
+      
+      if (requestedId) {
+        landing = landings.find(l => l.id === requestedId) || landings[0];
+      } else {
+        landing = landings[0];
+      }
     }
 
-    // Fetch links
+    // Fetch links for the ACTIVE landing page
     const linksRes = await dbClient.execute({
       sql: "SELECT * FROM links WHERE landing_id = ? ORDER BY position ASC, created_at ASC",
       args: [landing.id]
@@ -110,11 +122,90 @@ export async function GET(req: Request) {
       },
       plan,
       landing,
+      landings, // all user landing pages
       links
     });
   } catch (error: any) {
     console.error("GET landing error:", error);
     return NextResponse.json({ error: error?.message || "Error al obtener datos" }, { status: 500 });
+  }
+}
+
+// POST create new landing page
+export async function POST(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
+    // Obtener plan del usuario
+    const userRes = await dbClient.execute({
+      sql: "SELECT plan_id FROM users WHERE id = ?",
+      args: [userId]
+    });
+    if (userRes.rows.length === 0) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    const userPlanId = userRes.rows[0].plan_id;
+
+    // Obtener limite de landing pages
+    const planRes = await dbClient.execute({
+      sql: "SELECT features_json FROM plans WHERE id = ?",
+      args: [userPlanId]
+    });
+    const features = JSON.parse(planRes.rows[0].features_json as string);
+    const maxLandings = features.max_landing_pages || 1;
+
+    // Contar landings actuales
+    const countRes = await dbClient.execute({
+      sql: "SELECT COUNT(*) as count FROM landing_pages WHERE user_id = ?",
+      args: [userId]
+    });
+    const currentCount = Number(countRes.rows[0].count);
+
+    if (currentCount >= maxLandings) {
+      return NextResponse.json({ 
+        error: `Has alcanzado el límite de perfiles permitidos en tu plan (${maxLandings}). Actualiza a un plan superior para crear más.` 
+      }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { title, slug } = body;
+
+    // Validar slug
+    const cleanSlug = slug ? slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "") : `perfil_${Date.now()}`;
+    const existingSlug = await dbClient.execute({
+      sql: "SELECT id FROM landing_pages WHERE slug = ?",
+      args: [cleanSlug]
+    });
+
+    if (existingSlug.rows.length > 0) {
+      return NextResponse.json({ error: "El nombre de usuario (slug) elegido ya está en uso." }, { status: 400 });
+    }
+
+    const landingId = `land_${Date.now()}`;
+    const defaultTheme = {
+      button_style: "rounded",
+      button_bg: "#4f46e5",
+      button_text_color: "#ffffff",
+      text_color: "#ffffff",
+      font_family: "Inter",
+      card_glass: true,
+      remove_watermark: false,
+      social_links: {}
+    };
+
+    await dbClient.execute({
+      sql: `INSERT INTO landing_pages (id, user_id, slug, title, bio, avatar_url, background_type, background_url, theme_config_json)
+            VALUES (?, ?, ?, ?, '¡Bienvenido a mi nuevo perfil!', '', 'gradient', 'from-slate-900 via-indigo-950 to-slate-900', ?)`,
+      args: [landingId, userId, cleanSlug, title || "Nuevo Perfil", JSON.stringify(defaultTheme)]
+    });
+
+    return NextResponse.json({ success: true, message: "Perfil creado con éxito", id: landingId });
+  } catch (error: any) {
+    console.error("POST landing error:", error);
+    return NextResponse.json({ error: error?.message || "Error al crear landing page" }, { status: 500 });
   }
 }
 
@@ -127,14 +218,18 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const { slug, title, bio, avatar_url, background_type, background_url, theme_config_json } = body;
+    const { id, slug, title, bio, avatar_url, background_type, background_url, theme_config_json } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "El ID de la landing page es requerido" }, { status: 400 });
+    }
 
     // Verify slug uniqueness if slug changed
     if (slug) {
       const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
       const existingSlug = await dbClient.execute({
-        sql: "SELECT user_id FROM landing_pages WHERE slug = ? AND user_id != ?",
-        args: [cleanSlug, session.user.id]
+        sql: "SELECT id FROM landing_pages WHERE slug = ? AND id != ?",
+        args: [cleanSlug, id]
       });
 
       if (existingSlug.rows.length > 0) {
@@ -152,7 +247,7 @@ export async function PUT(req: Request) {
                 background_url = COALESCE(?, background_url),
                 theme_config_json = COALESCE(?, theme_config_json),
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?`,
+            WHERE id = ? AND user_id = ?`,
       args: [
         slug ? slug.toLowerCase().trim() : null,
         title ?? null,
@@ -161,6 +256,7 @@ export async function PUT(req: Request) {
         background_type ?? null,
         background_url ?? null,
         theme_config_json ? JSON.stringify(theme_config_json) : null,
+        id,
         session.user.id
       ]
     });

@@ -241,6 +241,12 @@ export default function CommercialLandingPage() {
                   <ul className="space-y-3 mb-8 text-sm">
                     <li className="flex items-center gap-3 text-slate-200">
                       <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span className="font-semibold text-white">
+                        {plan.features?.max_landing_pages >= 999 ? "Múltiples Perfiles Ilimitados" : `Hasta ${plan.features?.max_landing_pages || 1} Perfil`}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-3 text-slate-200">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                       <span>
                         Hasta {plan.features?.max_links >= 999 ? "Enlaces Ilimitados" : `${plan.features?.max_links} Enlaces`}
                       </span>

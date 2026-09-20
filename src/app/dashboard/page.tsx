@@ -61,6 +61,10 @@ export default function AdminDashboardPage() {
   });
 
   const [links, setLinks] = useState<LinkItem[]>([]);
+  
+  // Multiple Landings state
+  const [landings, setLandings] = useState<any[]>([]);
+  const [creatingLanding, setCreatingLanding] = useState(false);
 
   // Links form state
   const [newLinkTitle, setNewLinkTitle] = useState("");
@@ -123,6 +127,7 @@ export default function AdminDashboardPage() {
         const data = await resLanding.json();
         setUserData(data.user);
         setPlanData(data.plan);
+        setLandings(data.landings || []);
 
         if (data.landing) {
           setLandingId(data.landing.id);
@@ -196,6 +201,7 @@ export default function AdminDashboardPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: landingId,
           slug,
           title,
           bio,
@@ -218,6 +224,58 @@ export default function AdminDashboardPage() {
       setSaving(false);
     }
   };
+
+  // Create new landing page
+  const handleCreateLanding = async () => {
+    setCreatingLanding(true);
+    try {
+      const res = await fetch("/api/landing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Nuevo Perfil", slug: `perfil_${Date.now()}` })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(`❌ ${data.error || "Error al crear perfil"}`);
+      } else {
+        showToast("✅ Perfil creado con éxito");
+        loadData(); // reload all data
+      }
+    } catch (err: any) {
+      showToast("❌ Error al crear perfil");
+    } finally {
+      setCreatingLanding(false);
+    }
+  };
+
+  const handleSwitchLanding = (id: string) => {
+    const selected = landings.find(l => l.id === id);
+    if (selected) {
+      setLandingId(selected.id);
+      setSlug(selected.slug || "");
+      setTitle(selected.title || "");
+      setBio(selected.bio || "");
+      setAvatarUrl(selected.avatar_url || "");
+      setBackgroundType(selected.background_type || "gradient");
+      setBackgroundUrl(selected.background_url || "from-slate-900 via-indigo-950 to-purple-950");
+      if (selected.theme_config_json) {
+        setThemeConfig(selected.theme_config_json);
+      }
+      // Re-fetch links for the selected landing page using loadData or fetch just links
+      // Alternatively, we can just loadData to refresh everything
+    }
+  };
+
+  // When landingId changes, refetch links
+  useEffect(() => {
+    if (landingId && status === "authenticated") {
+      fetch("/api/landing?id=" + landingId)
+        .then(res => res.json())
+        .then(data => {
+          if (data.links) setLinks(data.links);
+        });
+    }
+  }, [landingId]);
 
   // Upload file (Avatar, Video, or Payment Proof Image)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "video" | "proof") => {
@@ -603,6 +661,30 @@ export default function AdminDashboardPage() {
         
         {/* Left Panel: Configuration Tabs (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
+
+          {/* Profile Switcher */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <span className="text-xs font-semibold text-slate-400 whitespace-nowrap">Perfil Activo:</span>
+              <select
+                value={landingId}
+                onChange={(e) => handleSwitchLanding(e.target.value)}
+                className="bg-slate-950 border border-slate-700 text-white text-sm rounded-xl px-3 py-2 w-full sm:w-auto outline-none"
+              >
+                {landings.map(l => (
+                  <option key={l.id} value={l.id}>{l.title || l.slug}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleCreateLanding}
+              disabled={creatingLanding}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all border border-slate-700 w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4" />
+              {creatingLanding ? "Creando..." : "Crear Nuevo Perfil"}
+            </button>
+          </div>
           
           {/* Tab Navigation Controls */}
           <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900 border border-slate-800">

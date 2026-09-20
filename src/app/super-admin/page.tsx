@@ -237,12 +237,13 @@ export default function SuperAdminDashboardPage() {
     }));
   };
 
-  // Change numerical limit max_links or price_usd
-  const handlePlanNumberChange = (planId: string, field: "price_usd" | "max_links", val: number) => {
+  // Change numerical limit max_links, max_landing_pages or price_usd
+  const handlePlanNumberChange = (planId: string, field: "price_usd" | "max_links" | "max_landing_pages", val: number) => {
     setPlans(plans.map(p => {
       if (p.id === planId) {
         if (field === "price_usd") return { ...p, price_usd: val };
         if (field === "max_links") return { ...p, features: { ...p.features, max_links: val } };
+        if (field === "max_landing_pages") return { ...p, features: { ...p.features, max_landing_pages: val } };
       }
       return p;
     }));
@@ -1245,6 +1246,16 @@ export default function SuperAdminDashboardPage() {
                         />
                       </div>
                     )}
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Límite de Landing Pages (999 = Ilimitado)</label>
+                      <input
+                        type="number"
+                        value={plan.features?.max_landing_pages || 1}
+                        onChange={(e) => handlePlanNumberChange(plan.id, "max_landing_pages", parseInt(e.target.value) || 1)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}

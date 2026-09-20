@@ -22,6 +22,7 @@ export interface PlanFeatures {
   social_icons: boolean;
   max_links: number;
   all_icons: boolean; // false = 10 íconos gratis, true = todos los +60 íconos
+  max_landing_pages: number; // Límite de landing pages por plan
 }
 
 export interface Plan {
@@ -169,7 +170,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS landing_pages (
   id TEXT PRIMARY KEY,
-  user_id TEXT UNIQUE NOT NULL,
+  user_id TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   title TEXT NOT NULL,
   bio TEXT,
