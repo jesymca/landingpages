@@ -85,11 +85,15 @@ export default function SuperAdminDashboardPage() {
 
       // Fetch users and stats
       try {
-        const resUsers = await fetch("/api/super-admin/users");
+        const resUsers = await fetch("/api/super-admin/users", { cache: 'no-store' });
         if (resUsers.ok) {
           const uData = await resUsers.json();
           setUsers(uData.users || []);
           if (uData.stats) setStats(uData.stats);
+        } else {
+          const text = await resUsers.text();
+          console.error("API Users Error:", text);
+          showToast(`Error cargando usuarios: ${resUsers.status}`);
         }
       } catch (e) {
         console.error("Error fetching users:", e);
@@ -97,10 +101,12 @@ export default function SuperAdminDashboardPage() {
 
       // Fetch payments
       try {
-        const resPayments = await fetch("/api/super-admin/payments");
+        const resPayments = await fetch("/api/super-admin/payments", { cache: 'no-store' });
         if (resPayments.ok) {
           const pData = await resPayments.json();
           setPayments(pData.payments || []);
+        } else {
+          console.error("API Payments Error:", await resPayments.text());
         }
       } catch (e) {
         console.error("Error fetching payments:", e);
