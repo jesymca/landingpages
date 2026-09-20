@@ -18,44 +18,60 @@ export async function GET() {
     let paidUsersCount = 0;
     let freeUsersCount = 0;
 
-    const usersWithSubscription = usersRes.rows.map(user => {
-      let remainingDays = 0;
-      let isExpired = false;
+    let usersWithSubscription;
+    try {
+      usersWithSubscription = usersRes.rows.map(user => {
+        let remainingDays = 0;
+        let isExpired = false;
 
-      const rawPlan = (user.plan_id as string || "").toUpperCase();
-      const planId = rawPlan === "PAGO" ? "PAGO" : "GRATIS";
+        const rawPlan = (user.plan_id as string || "").toUpperCase();
+        const planId = rawPlan === "PAGO" ? "PAGO" : "GRATIS";
 
-      if (planId === "PAGO") {
-        paidUsersCount++;
-        if (user.subscription_expires_at) {
-          const expiresAt = new Date(user.subscription_expires_at as string).getTime();
-          const now = Date.now();
-          const diffMs = expiresAt - now;
-          remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-          if (diffMs <= 0) isExpired = true;
+        if (planId === "PAGO") {
+          paidUsersCount++;
+          if (user.subscription_expires_at) {
+            const expiresAt = new Date(user.subscription_expires_at as string).getTime();
+            const now = Date.now();
+            const diffMs = expiresAt - now;
+            remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+            if (diffMs <= 0) isExpired = true;
+          }
+        } else {
+          freeUsersCount++;
         }
-      } else {
-        freeUsersCount++;
-      }
 
-      return {
-        ...user,
-        plan_id: planId,
-        remaining_days: remainingDays,
-        is_subscription_expired: isExpired
-      };
-    });
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          plan_id: planId,
+          created_at: user.created_at,
+          subscription_started_at: user.subscription_started_at,
+          subscription_expires_at: user.subscription_expires_at,
+          slug: user.slug,
+          remaining_days: remainingDays,
+          is_subscription_expired: isExpired
+        };
+      });
+    } catch (e: any) {
+      return NextResponse.json({ error: "Map error: " + e?.message }, { status: 500 });
+    }
 
-    return NextResponse.json({
-      success: true,
-      users: usersWithSubscription,
-      stats: {
-        total_users: totalUsersCount,
-        paid_users: paidUsersCount,
-        free_users: freeUsersCount,
-      }
-    });
+    try {
+      return NextResponse.json({
+        success: true,
+        users: usersWithSubscription,
+        stats: {
+          total_users: totalUsersCount,
+          paid_users: paidUsersCount,
+          free_users: freeUsersCount,
+        }
+      });
+    } catch (e: any) {
+       return NextResponse.json({ error: "JSON serialize error: " + e?.message }, { status: 500 });
+    }
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Error al obtener usuarios" }, { status: 500 });
+    return NextResponse.json({ error: "DB error: " + error?.message, stack: error?.stack }, { status: 500 });
   }
 }
