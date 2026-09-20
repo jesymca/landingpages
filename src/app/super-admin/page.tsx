@@ -82,50 +82,83 @@ export default function SuperAdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resPlans, resUsers, resPayments, resMethods, resBanks, resBcv, resDiscounts] = await Promise.all([
-        fetch("/api/super-admin/plans"),
-        fetch("/api/super-admin/users"),
-        fetch("/api/super-admin/payments"),
-        fetch("/api/super-admin/payment-methods"),
-        fetch("/api/banks?all=true"),
-        fetch("/api/bcv"),
-        fetch("/api/super-admin/discounts")
-      ]);
 
-      if (resPlans.ok) {
-        const data = await resPlans.json();
-        setPlans(data.plans || []);
+      // Fetch users and stats
+      try {
+        const resUsers = await fetch("/api/super-admin/users");
+        if (resUsers.ok) {
+          const uData = await resUsers.json();
+          setUsers(uData.users || []);
+          if (uData.stats) setStats(uData.stats);
+        }
+      } catch (e) {
+        console.error("Error fetching users:", e);
       }
 
-      if (resUsers.ok) {
-        const uData = await resUsers.json();
-        setUsers(uData.users || []);
-        if (uData.stats) setStats(uData.stats);
+      // Fetch payments
+      try {
+        const resPayments = await fetch("/api/super-admin/payments");
+        if (resPayments.ok) {
+          const pData = await resPayments.json();
+          setPayments(pData.payments || []);
+        }
+      } catch (e) {
+        console.error("Error fetching payments:", e);
       }
 
-      if (resPayments.ok) {
-        const pData = await resPayments.json();
-        setPayments(pData.payments || []);
+      // Fetch plans
+      try {
+        const resPlans = await fetch("/api/super-admin/plans");
+        if (resPlans.ok) {
+          const data = await resPlans.json();
+          setPlans(data.plans || []);
+        }
+      } catch (e) {
+        console.error("Error fetching plans:", e);
       }
 
-      if (resMethods.ok) {
-        const mData = await resMethods.json();
-        setPaymentMethods(mData.methods || []);
+      // Fetch payment methods
+      try {
+        const resMethods = await fetch("/api/super-admin/payment-methods");
+        if (resMethods.ok) {
+          const mData = await resMethods.json();
+          setPaymentMethods(mData.methods || []);
+        }
+      } catch (e) {
+        console.error("Error fetching payment methods:", e);
       }
 
-      if (resBanks.ok) {
-        const bData = await resBanks.json();
-        setBanks(bData.banks || []);
+      // Fetch banks
+      try {
+        const resBanks = await fetch("/api/banks?all=true");
+        if (resBanks.ok) {
+          const bData = await resBanks.json();
+          setBanks(bData.banks || []);
+        }
+      } catch (e) {
+        console.error("Error fetching banks:", e);
       }
 
-      if (resBcv.ok) {
-        const bcv = await resBcv.json();
-        if (bcv.rate) setBcvRate(bcv.rate);
+      // Fetch BCV rate
+      try {
+        const resBcv = await fetch("/api/bcv");
+        if (resBcv.ok) {
+          const bcv = await resBcv.json();
+          if (bcv.rate) setBcvRate(bcv.rate);
+        }
+      } catch (e) {
+        console.error("Error fetching BCV rate:", e);
       }
 
-      if (resDiscounts.ok) {
-        const dData = await resDiscounts.json();
-        if (dData.discounts) setDiscounts(dData.discounts);
+      // Fetch discounts
+      try {
+        const resDiscounts = await fetch("/api/super-admin/discounts");
+        if (resDiscounts.ok) {
+          const dData = await resDiscounts.json();
+          if (dData.discounts) setDiscounts(dData.discounts);
+        }
+      } catch (e) {
+        console.error("Error fetching discounts:", e);
       }
     } catch (err) {
       console.error("Error loading super admin data:", err);
