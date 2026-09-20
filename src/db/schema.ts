@@ -9,6 +9,8 @@ export interface User {
   google_id?: string;
   plan_id: string; // 'GRATIS' | 'PAGO'
   created_at: string;
+  subscription_started_at?: string;
+  subscription_expires_at?: string;
 }
 
 export interface PlanFeatures {
@@ -19,6 +21,7 @@ export interface PlanFeatures {
   custom_fonts: boolean;
   social_icons: boolean;
   max_links: number;
+  all_icons: boolean; // false = 10 íconos gratis, true = todos los +60 íconos
 }
 
 export interface Plan {
@@ -82,6 +85,29 @@ export interface SystemSetting {
   updated_at: string;
 }
 
+export interface Bank {
+  code: string;
+  name: string;
+  is_active: number;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  currency: 'VES' | 'USD';
+  type: 'pago_movil' | 'bank_transfer' | 'binance' | 'zinli' | 'zelle' | 'other';
+  bank_code?: string;
+  bank_name?: string;
+  account_number?: string;
+  id_number?: string;
+  phone_number?: string;
+  email?: string;
+  pay_id?: string;
+  instructions?: string;
+  is_active: number;
+  created_at: string;
+}
+
 export interface PaymentRecord {
   id: string;
   user_id: string;
@@ -89,9 +115,19 @@ export interface PaymentRecord {
   amount_usd: number;
   amount_ves: number;
   bcv_rate: number;
+  payment_method_id?: string;
+  payment_currency: 'VES' | 'USD';
+  origin_bank_code?: string;
+  origin_bank_name?: string;
+  destination_method_name?: string;
   reference: string;
+  payer_name?: string;
+  payer_phone?: string;
+  payer_id_number?: string;
+  notes?: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  approved_at?: string;
 }
 
 // SQL Table Initialization statements
@@ -113,6 +149,8 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'ADMIN',
   google_id TEXT,
   plan_id TEXT NOT NULL DEFAULT 'GRATIS',
+  subscription_started_at DATETIME,
+  subscription_expires_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (plan_id) REFERENCES plans(id)
 );
@@ -151,16 +189,49 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS banks (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'VES',
+  type TEXT NOT NULL DEFAULT 'pago_movil',
+  bank_code TEXT,
+  bank_name TEXT,
+  account_number TEXT,
+  id_number TEXT,
+  phone_number TEXT,
+  email TEXT,
+  pay_id TEXT,
+  instructions TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  plan_id TEXT NOT NULL,
+  plan_id TEXT NOT NULL DEFAULT 'PAGO',
   amount_usd REAL NOT NULL,
   amount_ves REAL NOT NULL,
   bcv_rate REAL NOT NULL,
+  payment_method_id TEXT,
+  payment_currency TEXT NOT NULL DEFAULT 'VES',
+  origin_bank_code TEXT,
+  origin_bank_name TEXT,
+  destination_method_name TEXT,
   reference TEXT NOT NULL,
+  payer_name TEXT,
+  payer_phone TEXT,
+  payer_id_number TEXT,
+  notes TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  approved_at DATETIME,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 `;

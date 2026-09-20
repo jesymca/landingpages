@@ -76,6 +76,17 @@ export default function AdminDashboardPage() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Payment Methods & Venezuelan Banks catalog state
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [banks, setBanks] = useState<any[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<string>("");
+  const [selectedOriginBankCode, setSelectedOriginBankCode] = useState<string>("");
+  const [selectedOriginBankName, setSelectedOriginBankName] = useState<string>("");
+  const [payerName, setPayerName] = useState("");
+  const [payerPhone, setPayerPhone] = useState("");
+  const [payerIdNumber, setPayerIdNumber] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+
   // File upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -89,9 +100,11 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resLanding, resBcv] = await Promise.all([
+      const [resLanding, resBcv, resMethods, resBanks] = await Promise.all([
         fetch("/api/landing"),
-        fetch("/api/bcv")
+        fetch("/api/bcv"),
+        fetch("/api/super-admin/payment-methods"),
+        fetch("/api/banks")
       ]);
 
       if (resLanding.ok) {
@@ -115,6 +128,20 @@ export default function AdminDashboardPage() {
         if (data.links) {
           setLinks(data.links);
         }
+      }
+
+      if (resMethods.ok) {
+        const mData = await resMethods.json();
+        const activeMethods = (mData.methods || []).filter((m: any) => m.is_active);
+        setPaymentMethods(activeMethods);
+        if (activeMethods.length > 0) {
+          setSelectedMethodId(activeMethods[0].id);
+        }
+      }
+
+      if (resBanks.ok) {
+        const bData = await resBanks.json();
+        setBanks(bData.banks || []);
       }
 
       if (resBcv.ok) {
@@ -301,16 +328,17 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Submit Payment in Bolívares
+  // Submit Payment Declaration (USD or VES)
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentRef) return;
 
+    const selectedPm = paymentMethods.find(pm => pm.id === selectedMethodId);
+    const amountUsd = 4.99;
+    const amountVes = Number((amountUsd * bcvRate).toFixed(2));
+
     setSubmittingPayment(true);
     try {
-      const amountUsd = 4.99;
-      const amountVes = Number((amountUsd * bcvRate).toFixed(2));
-
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -319,7 +347,16 @@ export default function AdminDashboardPage() {
           amount_usd: amountUsd,
           amount_ves: amountVes,
           bcv_rate: bcvRate,
-          plan_id: "PAGO"
+          plan_id: "PAGO",
+          payment_method_id: selectedMethodId,
+          payment_currency: selectedPm ? selectedPm.currency : "VES",
+          origin_bank_code: selectedOriginBankCode,
+          origin_bank_name: selectedOriginBankName,
+          destination_method_name: selectedPm ? selectedPm.name : "Pago Móvil / Transferencia",
+          payer_name: payerName,
+          payer_phone: payerPhone,
+          payer_id_number: payerIdNumber,
+          notes: paymentNotes
         })
       });
 
@@ -327,12 +364,16 @@ export default function AdminDashboardPage() {
       if (!res.ok) {
         showToast(`❌ ${data.error}`);
       } else {
-        showToast("🎉 ¡Pago registrado! Tu plan ha sido actualizado a PAGO PRO.");
+        showToast("🎉 ¡Declaración de pago registrada con éxito! El Administrador verificará los fondos y tu suscripción de 30 días se activará al ser aprobada.");
         setPaymentRef("");
+        setPayerName("");
+        setPayerPhone("");
+        setPayerIdNumber("");
+        setPaymentNotes("");
         loadData();
       }
     } catch (err: any) {
-      showToast("❌ Error procesando el pago");
+      showToast("❌ Error al registrar declaración de pago");
     } finally {
       setSubmittingPayment(false);
     }
@@ -874,10 +915,48 @@ export default function AdminDashboardPage() {
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
                     <Crown className="w-5 h-5 text-amber-400" /> Plan de Membresía Actual
                   </h3>
-                  <span className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-bold text-xs">
-                    {userData?.plan_id || "GRATIS"}
+                  <span className={`px-3 py-1 rounded-full border font-bold text-xs ${
+                    userData?.plan_id === "PAGO"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                      : "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                  }`}>
+                    {userData?.plan_id === "PAGO" ? "PAGO PRO (Activo)" : "GRATIS"}
                   </span>
                 </div>
+
+                {/* 30-Day Subscription Progress Bar for PAGO users */}
+                {userData?.plan_id === "PAGO" && (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-indigo-500/10 border border-emerald-500/30 space-y-2">
+                    {(() => {
+                      const expiresAt = userData?.subscription_expires_at ? new Date(userData.subscription_expires_at).getTime() : Date.now() + 30 * 24 * 60 * 60 * 1000;
+                      const diffMs = expiresAt - Date.now();
+                      const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                      const percent = Math.min(100, Math.max(0, Math.round((daysLeft / 30) * 100)));
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-white flex items-center gap-1.5">
+                              <Sparkles className="w-4 h-4 text-emerald-400" /> Suscripción PRO Activa
+                            </span>
+                            <span className="font-bold text-emerald-300">
+                              {daysLeft > 0 ? `${daysLeft} de 30 días restantes` : "Vence hoy"}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            El contador de 30 días comenzó al momento de la aprobación del pago por el Administrador.
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
@@ -885,72 +964,176 @@ export default function AdminDashboardPage() {
                     <strong className="text-white text-sm">{features.max_links >= 999 ? "Ilimitados" : features.max_links}</strong>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-slate-400 block">Videos de Fondo:</span>
-                    <strong className={features.video_background ? "text-emerald-400 text-sm" : "text-slate-500 text-sm"}>
-                      {features.video_background ? "Permitido" : "No incluido"}
+                    <span className="text-slate-400 block">Íconos Característicos:</span>
+                    <strong className={features.all_icons ? "text-emerald-400 text-sm" : "text-indigo-400 text-sm"}>
+                      {features.all_icons ? "+60 Íconos PRO" : "10 Íconos Básicos"}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              {/* Upgrade Card with Bolívares Payment */}
-              {userData?.plan_id !== "PAGO" && (
-                <div className="glass-panel p-6 rounded-3xl border border-amber-500/40 bg-gradient-to-br from-amber-500/5 via-slate-900 to-indigo-950 space-y-5">
+              {/* Payment Declaration Card */}
+              <div className="glass-panel p-6 rounded-3xl border border-amber-500/40 bg-gradient-to-br from-amber-500/5 via-slate-900 to-indigo-950 space-y-5">
+                <div>
+                  <h3 className="text-xl font-black text-white">Declarar Pago de Suscripción PRO</h3>
+                  <p className="text-slate-300 text-xs mt-1">
+                    Selecciona tu método de pago preferido en Bolívares o Dólares, efectúa el pago e ingresa la referencia. El Administrador verificará los fondos y tus 30 días comenzarán al ser aprobado.
+                  </p>
+                </div>
+
+                {/* Price Conversion Box */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-white">Actualizar a Plan PAGO PRO</h3>
-                    <p className="text-slate-300 text-xs mt-1">
-                      Desbloquea videos de fondo, elimina marcas de agua y disfruta enlaces ilimitados.
+                    <span className="text-xs text-slate-400">Monto Mensual USD:</span>
+                    <p className="text-2xl font-black text-white">$4.99 <span className="text-xs font-normal text-slate-400">/ 30 días</span></p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs text-amber-400 font-semibold">Tasa Oficial BCV: {bcvRate.toFixed(2)} Bs</span>
+                    <p className="text-xl font-extrabold text-emerald-400">
+                      {(4.99 * bcvRate).toFixed(2)} Bs.
                     </p>
                   </div>
+                </div>
 
-                  {/* Price Conversion Box */}
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-slate-400">Precio en USD:</span>
-                      <p className="text-2xl font-black text-white">$4.99 <span className="text-xs font-normal text-slate-400">/ mes</span></p>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-xs text-amber-400 font-semibold">Tasa Oficial BCV: {bcvRate.toFixed(2)} Bs</span>
-                      <p className="text-xl font-extrabold text-emerald-400">
-                        {(4.99 * bcvRate).toFixed(2)} Bs.
-                      </p>
+                {/* Step 1: Select Payment Method */}
+                <form onSubmit={handleSubmitPayment} className="space-y-4 pt-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      1. Selecciona el Método de Pago Aceptado
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {paymentMethods.map((pm) => (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => setSelectedMethodId(pm.id)}
+                          className={`p-3 rounded-xl border text-xs font-semibold text-left flex items-center justify-between transition-all ${
+                            selectedMethodId === pm.id
+                              ? "border-amber-500 bg-amber-500/10 text-white ring-1 ring-amber-500"
+                              : "border-slate-800 bg-slate-950/80 text-slate-400 hover:border-slate-700"
+                          }`}
+                        >
+                          <span className="truncate">{pm.name}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                            pm.currency === "USD" ? "bg-emerald-500/20 text-emerald-400" : "bg-indigo-500/20 text-indigo-400"
+                          }`}>
+                            {pm.currency}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Bank Details & Payment Proof Submission */}
-                  <form onSubmit={handleSubmitPayment} className="space-y-4 pt-2">
-                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-1">
-                      <p className="font-bold text-white mb-1">💳 Datos de Pago Móvil / Transferencia:</p>
-                      <p>Banco: <strong>Mercantil (0105)</strong></p>
-                      <p>Cédula / RIF: <strong>V-20.123.456</strong></p>
-                      <p>Teléfono: <strong>0412-0000000</strong></p>
-                    </div>
+                  {/* Selected Payment Method Instructions Box */}
+                  {(() => {
+                    const pm = paymentMethods.find(m => m.id === selectedMethodId);
+                    if (!pm) return null;
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        Número de Referencia Bancaria (6 a 8 dígitos)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={paymentRef}
-                        onChange={(e) => setPaymentRef(e.target.value)}
-                        placeholder="Ej: 98765432"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
-                      />
-                    </div>
+                    return (
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-1.5 font-mono">
+                        <p className="font-bold text-white text-sm font-sans mb-1 flex items-center gap-2">
+                          💳 Datos para realizar tu pago ({pm.name}):
+                        </p>
+                        {pm.bank_name && <p>Banco Destino: <strong className="text-indigo-400">{pm.bank_code} - {pm.bank_name}</strong></p>}
+                        {pm.id_number && <p>Cédula / RIF Destino: <strong className="text-white">{pm.id_number}</strong></p>}
+                        {pm.phone_number && <p>Teléfono Pago Móvil: <strong className="text-emerald-400">{pm.phone_number}</strong></p>}
+                        {pm.account_number && <p>Número de Cuenta: <strong className="text-white">{pm.account_number}</strong></p>}
+                        {pm.email && <p>Correo Electrónico: <strong className="text-amber-300">{pm.email}</strong></p>}
+                        {pm.pay_id && <p>Binance Pay ID: <strong className="text-amber-400">{pm.pay_id}</strong></p>}
+                        {pm.instructions && (
+                          <p className="text-[11px] text-slate-400 italic pt-1 font-sans border-t border-slate-900">
+                            {pm.instructions}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
-                    <button
-                      type="submit"
-                      disabled={submittingPayment}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-amber-500/20"
-                    >
-                      {submittingPayment ? "Validando Pago..." : "Confirmar Pago en Bolívares y Activar PRO"}
-                    </button>
-                  </form>
-                </div>
-              )}
+                  {/* Step 2: Adaptive Form Fields */}
+                  {(() => {
+                    const pm = paymentMethods.find(m => m.id === selectedMethodId);
+                    const isVes = pm?.currency === "VES";
+
+                    return (
+                      <div className="space-y-3 pt-2">
+                        {isVes && (
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                              Banco de Origen (Desde donde realizaste el pago)
+                            </label>
+                            <select
+                              required
+                              value={selectedOriginBankCode}
+                              onChange={(e) => {
+                                const b = banks.find(item => item.code === e.target.value);
+                                setSelectedOriginBankCode(e.target.value);
+                                setSelectedOriginBankName(b ? b.name : "");
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="">Selecciona tu Banco de Origen...</option>
+                              {banks.map(b => (
+                                <option key={b.code} value={b.code}>{b.code} - {b.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">
+                            Número de Referencia / Hash / ID de Transacción
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={paymentRef}
+                            onChange={(e) => setPaymentRef(e.target.value)}
+                            placeholder={isVes ? "Ej: 98765432 (últimos 6 a 8 dígitos)" : "Ej: Hash de transacción o ID de envío"}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                              Nombre del Titular Pagador
+                            </label>
+                            <input
+                              type="text"
+                              value={payerName}
+                              onChange={(e) => setPayerName(e.target.value)}
+                              placeholder="Ej: José Herrera"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">
+                              Cédula / Teléfono del Pagador
+                            </label>
+                            <input
+                              type="text"
+                              value={payerIdNumber}
+                              onChange={(e) => setPayerIdNumber(e.target.value)}
+                              placeholder="Ej: V-20.123.456 / 0412-0000000"
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={submittingPayment}
+                          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-amber-500/20 mt-2"
+                        >
+                          {submittingPayment ? "Registrando Declaración..." : "Enviar Declaración de Pago para Aprobación"}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </form>
+              </div>
             </div>
           )}
 

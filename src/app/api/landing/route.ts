@@ -104,7 +104,9 @@ export async function GET(req: Request) {
         email: user.email,
         name: user.name,
         role: user.role,
-        plan_id: user.plan_id
+        plan_id: user.plan_id,
+        subscription_started_at: user.subscription_started_at,
+        subscription_expires_at: user.subscription_expires_at
       },
       plan,
       landing,
