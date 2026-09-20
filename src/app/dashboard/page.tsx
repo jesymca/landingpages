@@ -549,30 +549,34 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const features: PlanFeatures = planData?.features_json || {
-    video_background: false,
-    remove_watermark: false,
-    unlimited_links: false,
-    premium_themes: false,
-    custom_fonts: false,
-    social_icons: true,
-    max_links: 5,
-    custom_image_upload: false,
-    image_effects: false,
-    extended_gradients: false,
-    extended_buttons: false,
-    max_landing_pages: 1
-  };
-
   // Subscription calculation
-  const expiresAtMs = userData?.subscription_expires_at ? new Date(userData.subscription_expires_at).getTime() : 0;
+  const expiresAtMs = userData?.subscription_expires_at ? new Date(userData.subscription_expires_at).getTime() : null;
   const nowMs = Date.now();
-  const diffMs = expiresAtMs - nowMs;
-  const isPaidActive = userData?.plan_id === "PAGO" && diffMs > 0;
-  const daysRemaining = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-  const hoursRemaining = Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+  const diffMs = expiresAtMs ? expiresAtMs - nowMs : 0;
+  const isPaidUnlimited = userData?.plan_id === "PAGO" && !userData?.subscription_expires_at;
+  const isPaidActive = userData?.plan_id === "PAGO" && (isPaidUnlimited || (expiresAtMs !== null && expiresAtMs > nowMs));
+  const daysRemaining = isPaidUnlimited ? 9999 : Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const hoursRemaining = isPaidUnlimited ? 0 : Math.max(0, Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
   const totalDaysCycle = 30; // base visual percentage
-  const subscriptionPercent = Math.min(100, Math.max(0, Math.round((daysRemaining / totalDaysCycle) * 100)));
+  const subscriptionPercent = isPaidUnlimited ? 100 : Math.min(100, Math.max(0, Math.round((daysRemaining / totalDaysCycle) * 100)));
+
+  const features: PlanFeatures = (isPaidActive && planData?.features_json)
+    ? planData.features_json
+    : {
+        video_background: false,
+        remove_watermark: false,
+        unlimited_links: false,
+        premium_themes: false,
+        custom_fonts: false,
+        social_icons: true,
+        max_links: 5,
+        all_icons: false,
+        max_landing_pages: 1,
+        custom_image_upload: false,
+        image_effects: false,
+        extended_gradients: false,
+        extended_buttons: false
+      };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -644,11 +648,13 @@ export default function AdminDashboardPage() {
                   <h4 className="text-xs font-black text-white flex items-center gap-2">
                     Suscripción PAGO PRO Activa
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
-                      {daysRemaining} días y {hoursRemaining} horas restantes
+                      {isPaidUnlimited ? "Sin Vencimiento (Ilimitado)" : `${daysRemaining} días y ${hoursRemaining} horas restantes`}
                     </span>
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Vence el {new Date(expiresAtMs).toLocaleDateString()} a las {new Date(expiresAtMs).toLocaleTimeString()}
+                    {isPaidUnlimited
+                      ? "Membresía concedida de por vida."
+                      : `Vence el ${expiresAtMs ? new Date(expiresAtMs).toLocaleDateString() : ''} a las ${expiresAtMs ? new Date(expiresAtMs).toLocaleTimeString() : ''}`}
                   </p>
                 </div>
               ) : (
@@ -1589,7 +1595,7 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
 
-                {/* 30-Day / Multi-month Subscription Progress Bar for PAGO users */}
+                {/* 30-Day / Multi-month / Unlimited Subscription Progress Bar for PAGO users */}
                 {isPaidActive && (
                   <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-indigo-500/10 border border-emerald-500/30 space-y-2">
                     <div className="flex items-center justify-between text-xs">
@@ -1597,7 +1603,7 @@ export default function AdminDashboardPage() {
                         <Sparkles className="w-4 h-4 text-emerald-400" /> Suscripción PRO Activa
                       </span>
                       <span className="font-bold text-emerald-300">
-                        {daysRemaining} días y {hoursRemaining}h restantes
+                        {isPaidUnlimited ? "Plan PRO Ilimitado (De Por Vida)" : `${daysRemaining} días y ${hoursRemaining}h restantes`}
                       </span>
                     </div>
                     <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
@@ -1607,7 +1613,9 @@ export default function AdminDashboardPage() {
                       />
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Vence el {new Date(expiresAtMs).toLocaleDateString()} a las {new Date(expiresAtMs).toLocaleTimeString()}
+                      {isPaidUnlimited
+                        ? "Membresía concedida sin fecha de vencimiento (Acceso Ilimitado)."
+                        : `Vence el ${expiresAtMs ? new Date(expiresAtMs).toLocaleDateString() : ''} a las ${expiresAtMs ? new Date(expiresAtMs).toLocaleTimeString() : ''}`}
                     </p>
                   </div>
                 )}

@@ -29,14 +29,17 @@ export async function POST(req: Request) {
 
     // Check user plan max_links limit
     const userRes = await dbClient.execute({
-      sql: "SELECT plan_id FROM users WHERE id = ?",
+      sql: "SELECT plan_id, subscription_expires_at FROM users WHERE id = ?",
       args: [session.user.id]
     });
-    const planId = userRes.rows[0]?.plan_id || "GRATIS";
+    const userRow = userRes.rows[0];
+    const expiresAtMs = userRow?.subscription_expires_at ? new Date(userRow.subscription_expires_at as string).getTime() : null;
+    const isProActive = userRow?.plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
+    const effectivePlanId = isProActive ? 'PAGO' : 'GRATIS';
 
     const planRes = await dbClient.execute({
       sql: "SELECT features_json FROM plans WHERE id = ?",
-      args: [planId]
+      args: [effectivePlanId]
     });
 
     const features = planRes.rows[0] ? JSON.parse(planRes.rows[0].features_json as string) : { max_links: 5 };
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
 
     if (currentCount >= features.max_links) {
       return NextResponse.json({
-        error: `Has alcanzado el límite de ${features.max_links} enlaces de tu plan actual (${planId}). Actualiza a un plan Superior para enlaces ilimitados.`
+        error: `Has alcanzado el límite de ${features.max_links} enlaces de tu plan actual (${effectivePlanId}). Actualiza a un plan Superior para enlaces ilimitados.`
       }, { status: 400 });
     }
 

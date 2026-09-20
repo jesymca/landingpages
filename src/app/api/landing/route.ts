@@ -26,10 +26,15 @@ export async function GET(req: Request) {
 
     const user = userRes.rows[0];
 
-    // Fetch plan features
+    // Determine effective active plan
+    const expiresAtMs = user.subscription_expires_at ? new Date(user.subscription_expires_at as string).getTime() : null;
+    const isProActive = user.plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
+    const effectivePlanId = isProActive ? 'PAGO' : 'GRATIS';
+
+    // Fetch plan features for effective plan
     const planRes = await dbClient.execute({
       sql: "SELECT * FROM plans WHERE id = ?",
-      args: [user.plan_id]
+      args: [effectivePlanId]
     });
 
     const plan = planRes.rows[0] ? {
@@ -117,9 +122,11 @@ export async function GET(req: Request) {
         email: user.email,
         name: user.name,
         role: user.role,
-        plan_id: user.plan_id,
+        plan_id: effectivePlanId,
+        raw_plan_id: user.plan_id,
         subscription_started_at: user.subscription_started_at,
-        subscription_expires_at: user.subscription_expires_at
+        subscription_expires_at: user.subscription_expires_at,
+        is_pro_active: isProActive
       },
       plan,
       landing,
@@ -142,18 +149,21 @@ export async function POST(req: Request) {
 
     const userId = session.user.id;
 
-    // Obtener plan del usuario
+    // Obtener plan del usuario y verificar si la suscripción PRO está activa
     const userRes = await dbClient.execute({
-      sql: "SELECT plan_id FROM users WHERE id = ?",
+      sql: "SELECT plan_id, subscription_expires_at FROM users WHERE id = ?",
       args: [userId]
     });
     if (userRes.rows.length === 0) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-    const userPlanId = userRes.rows[0].plan_id;
+    const userRow = userRes.rows[0];
+    const expiresAtMs = userRow.subscription_expires_at ? new Date(userRow.subscription_expires_at as string).getTime() : null;
+    const isProActive = userRow.plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
+    const effectivePlanId = isProActive ? 'PAGO' : 'GRATIS';
 
     // Obtener limite de landing pages
     const planRes = await dbClient.execute({
       sql: "SELECT features_json FROM plans WHERE id = ?",
-      args: [userPlanId]
+      args: [effectivePlanId]
     });
     const features = JSON.parse(planRes.rows[0].features_json as string);
     const maxLandings = features.max_landing_pages || 1;
