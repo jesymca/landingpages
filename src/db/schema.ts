@@ -79,6 +79,8 @@ export interface LandingPage {
   updated_at: string;
 }
 
+export type LinkBlockType = 'link' | 'title' | 'text';
+
 export interface LinkItem {
   id: string;
   landing_id: string;
@@ -87,6 +89,9 @@ export interface LinkItem {
   icon: string;
   position: number;
   is_active: number;
+  block_type?: LinkBlockType;
+  content?: string;
+  is_adult?: number;
   created_at: string;
 }
 
@@ -204,6 +209,9 @@ CREATE TABLE IF NOT EXISTS links (
   icon TEXT DEFAULT 'globe',
   position INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
+  block_type TEXT NOT NULL DEFAULT 'link',
+  content TEXT,
+  is_adult INTEGER NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (landing_id) REFERENCES landing_pages(id) ON DELETE CASCADE
 );

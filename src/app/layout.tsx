@@ -21,7 +21,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@400;600;800;900&family=Montserrat:wght@400;600;800;900&family=Outfit:wght@400;600;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;600;800&family=Poppins:wght@400;600;800&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&family=Syne:wght@500;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;700;900&family=Dancing+Script:wght@500;700&family=Fira+Code:wght@400;600;700&family=Inter:wght@400;600;800;900&family=Montserrat:wght@400;600;800;900&family=Orbitron:wght@500;700;900&family=Outfit:wght@400;600;800;900&family=Pacifico&family=Permanent+Marker&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;600;800&family=Poppins:wght@400;600;800&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&family=Syne:wght@500;700;800&display=swap"
           rel="stylesheet"
         />
       </head>

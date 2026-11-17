@@ -112,8 +112,11 @@ export async function GET(req: Request) {
       title: row.title,
       url: row.url,
       icon: row.icon,
-      position: row.position,
-      is_active: Boolean(row.is_active)
+      position: Number(row.position || 0),
+      is_active: Number(row.is_active ?? 1),
+      block_type: (row.block_type as string) || "link",
+      content: (row.content as string) || "",
+      is_adult: Number(row.is_adult || 0)
     }));
 
     return NextResponse.json({

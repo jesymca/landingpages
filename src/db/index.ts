@@ -40,13 +40,19 @@ export async function executeQuery(sql: string, args: any[] = []) {
   }
 }
 
+let _schemaEnsured = false;
+
 export async function ensurePaymentColumns() {
+  if (_schemaEnsured) return;
   try {
     const client = getClient();
     await client.execute("ALTER TABLE payments ADD COLUMN proof_url TEXT").catch(() => {});
     await client.execute("ALTER TABLE payments ADD COLUMN months_paid INTEGER DEFAULT 1").catch(() => {});
     await client.execute("ALTER TABLE landing_pages ADD COLUMN is_disabled INTEGER DEFAULT 0").catch(() => {});
     await client.execute("ALTER TABLE landing_pages ADD COLUMN disabled_reason TEXT").catch(() => {});
+    await client.execute("ALTER TABLE links ADD COLUMN block_type TEXT DEFAULT 'link'").catch(() => {});
+    await client.execute("ALTER TABLE links ADD COLUMN content TEXT").catch(() => {});
+    await client.execute("ALTER TABLE links ADD COLUMN is_adult INTEGER DEFAULT 0").catch(() => {});
 
     // Ensure PAGO plan in database has all feature flags set to true
     const pagoRes = await client.execute("SELECT features_json FROM plans WHERE id = 'PAGO'").catch(() => null);
@@ -75,6 +81,7 @@ export async function ensurePaymentColumns() {
         }).catch(() => {});
       }
     }
+    _schemaEnsured = true;
   } catch (err) {
     // Ignore errors if columns already exist
   }

@@ -3,6 +3,14 @@
 import React from "react";
 import { ThemeConfig, LinkItem } from "@/db/schema";
 import { SocialIcon } from "./SocialIcons";
+import { LandingBlocksRenderer } from "./LandingBlocksRenderer";
+import {
+  getGradientClass,
+  resolveFontFamilyCss,
+  resolveImageFilterStyle,
+  resolveTextEffect,
+  resolveTextTypography,
+} from "@/lib/design-catalog";
 
 interface PhonePreviewProps {
   title: string;
@@ -25,136 +33,22 @@ export function PhonePreview({
   links,
   removeWatermarkAllowed = false,
 }: PhonePreviewProps) {
+  const fontFamilyCss = resolveFontFamilyCss(themeConfig?.font_family);
+  const titleTypo = resolveTextTypography(themeConfig?.text_style || "normal", true);
+  const titleFx = resolveTextEffect(
+    themeConfig?.text_effect || "none",
+    themeConfig?.text_color,
+    "#ffffff",
+    themeConfig?.text_style || "normal"
+  );
 
-  // Dynamic Button style generator
-  const getButtonStyle = () => {
-    const style = themeConfig?.button_style || "rounded";
-    const bg = themeConfig?.button_bg || "#4f46e5";
-    const textCol = themeConfig?.button_text_color || "#ffffff";
-
-    let radiusClass = "rounded-2xl";
-    if (style === "square") radiusClass = "rounded-none";
-    if (style === "pill") radiusClass = "rounded-full";
-    if (style === "rounded") radiusClass = "rounded-2xl";
-
-    let extraStyles: React.CSSProperties = {
-      backgroundColor: bg,
-      color: textCol,
-    };
-
-    const isMovingLight = style.startsWith("moving_light_");
-
-    if (isMovingLight) {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-      };
-    } else if (style === "outline") {
-      extraStyles = {
-        backgroundColor: "transparent",
-        borderColor: bg,
-        color: bg,
-        borderWidth: "2px",
-      };
-    } else if (style === "glass") {
-      extraStyles = {
-        backgroundColor: "rgba(255, 255, 255, 0.12)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderColor: "rgba(255, 255, 255, 0.25)",
-        color: textCol,
-      };
-    } else if (style === "glow" || style === "cyber_neon") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        boxShadow: `0 0 20px ${bg}90`,
-      };
-    } else if (style === "shadow") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
-      };
-    } else if (style === "neumorphism") {
-      extraStyles = {
-        backgroundColor: "#1e293b",
-        color: textCol,
-        boxShadow: "5px 5px 12px rgba(0,0,0,0.5), -5px -5px 12px rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.05)"
-      };
-    } else if (style === "gradient_border") {
-      extraStyles = {
-        background: `linear-gradient(#0f172a, #0f172a) padding-box, linear-gradient(to right, ${bg}, #ec4899) border-box`,
-        border: "2px solid transparent",
-        color: textCol,
-      };
-    } else if (style === "metallic") {
-      extraStyles = {
-        background: "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #cbd5e1 100%)",
-        color: "#0f172a",
-        boxShadow: "0 4px 15px rgba(255, 255, 255, 0.15)",
-        fontWeight: "bold",
-      };
-    } else if (style === "neon") {
-      extraStyles = {
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: bg,
-        borderWidth: "2px",
-        color: bg,
-        boxShadow: `0 0 15px ${bg}80, inset 0 0 10px ${bg}40`,
-      };
-    } else if (style === "floating_3d") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        borderBottom: "4px solid rgba(0,0,0,0.4)",
-        borderRight: "2px solid rgba(0,0,0,0.2)",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.4)",
-      };
-    } else if (style === "underline") {
-      extraStyles = {
-        backgroundColor: "transparent",
-        borderColor: bg,
-        borderBottomWidth: "2px",
-        borderRadius: "0px",
-        color: textCol,
-      };
-    }
-
-    return { radiusClass, extraStyles, styleKey: style, isMovingLight };
-  };
-
-  const { radiusClass, extraStyles, styleKey, isMovingLight } = getButtonStyle();
-
-  // Text Style & Font generator
-  const getTextStyleClasses = () => {
-    const textStyle = themeConfig?.text_style || "normal";
-    let styleClass = "";
-    if (textStyle === "bold") styleClass = "font-extrabold";
-    if (textStyle === "italic") styleClass = "italic";
-    if (textStyle === "bold_italic") styleClass = "font-extrabold italic";
-
-    const effect = themeConfig?.text_effect || "none";
-    let effectClass = "";
-    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(56,189,248,0.9)] [text-shadow:0_0_12px_rgba(56,189,248,0.8),0_0_25px_rgba(168,85,247,0.6)]";
-    if (effect === "shadow_3d" || effect === "shadow") effectClass = "[text-shadow:2px_2px_0px_#000,4px_4px_0px_rgba(0,0,0,0.6)]";
-    if (effect === "gradient_text" || effect === "gradient") effectClass = "bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-400 bg-clip-text text-transparent font-black";
-    if (effect === "neon_flicker") effectClass = "text-neon-flicker font-black";
-
-    return `${styleClass} ${effectClass}`;
-  };
-
-  const isGradientText = themeConfig?.text_effect === "gradient_text" || themeConfig?.text_effect === "gradient";
-
-  const getTextStyleObject = (defaultColor: string): React.CSSProperties => {
-    if (isGradientText) {
-      return { WebkitTextFillColor: "transparent", color: "transparent" };
-    }
-    return { color: themeConfig?.text_color || defaultColor };
-  };
-
-  const fontFamily = themeConfig?.font_family || "Inter";
+  const bioTypo = resolveTextTypography(themeConfig?.text_style || "normal", false);
+  const bioFx = resolveTextEffect(
+    themeConfig?.text_effect || "none",
+    themeConfig?.text_color,
+    "#cbd5e1",
+    themeConfig?.text_style || "normal"
+  );
 
   // Social link icons mapping
   const renderSocialIcons = () => {
@@ -169,7 +63,7 @@ export function PhonePreview({
       { key: "facebook", url: s.facebook },
       { key: "linkedin", url: s.linkedin },
       { key: "email", url: s.email ? `mailto:${s.email}` : "" },
-    ].filter(item => item.url && item.url.trim().length > 0);
+    ].filter((item) => item.url && item.url.trim().length > 0);
 
     if (list.length === 0) return null;
 
@@ -211,37 +105,26 @@ export function PhonePreview({
     }
 
     if (backgroundType === "gradient") {
-      if (backgroundUrl && backgroundUrl.startsWith("anim_")) {
-        const animName = backgroundUrl.replace("anim_", "");
-        return (
-          <div className={`absolute inset-0 z-0 bg-anim-${animName}`} />
-        );
-      }
-      if (themeConfig?.gradient_color_start && themeConfig?.gradient_color_end) {
+      if (
+        backgroundUrl?.startsWith("custom:") &&
+        themeConfig?.gradient_color_start &&
+        themeConfig?.gradient_color_end
+      ) {
         return (
           <div
             className="absolute inset-0 z-0"
             style={{
-              background: `linear-gradient(135deg, ${themeConfig.gradient_color_start}, ${themeConfig.gradient_color_end})`
+              background: `linear-gradient(135deg, ${themeConfig.gradient_color_start}, ${themeConfig.gradient_color_end})`,
             }}
           />
         );
       }
-      return (
-        <div className={`absolute inset-0 z-0 bg-gradient-to-br ${backgroundUrl || 'from-slate-900 via-indigo-950 to-purple-950'}`} />
-      );
+      return <div className={`absolute inset-0 z-0 ${getGradientClass(backgroundUrl)}`} />;
     }
 
     if (backgroundType === "image" && backgroundUrl) {
-      let filterStyle: React.CSSProperties = {};
       const filter = themeConfig?.image_filter || "none";
-
-      if (filter === "darken") filterStyle = { filter: "brightness(0.4)" };
-      else if (filter === "blur") filterStyle = { filter: "blur(6px) scale(1.08)" };
-      else if (filter === "sepia") filterStyle = { filter: "sepia(70%)" };
-      else if (filter === "grayscale") filterStyle = { filter: "grayscale(100%)" };
-      else if (filter === "contrast") filterStyle = { filter: "contrast(140%)" };
-      else if (filter === "hue") filterStyle = { filter: "hue-rotate(90deg)" };
+      const filterStyle = resolveImageFilterStyle(filter);
 
       return (
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -269,7 +152,7 @@ export function PhonePreview({
   return (
     <div
       className="w-[320px] h-[640px] rounded-[42px] border-[10px] border-slate-900 shadow-2xl bg-slate-950 overflow-hidden relative flex flex-col justify-between ring-1 ring-slate-800"
-      style={{ fontFamily: `'${fontFamily}', sans-serif` }}
+      style={{ fontFamily: fontFamilyCss }}
     >
       {/* Phone Notch */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-4 bg-slate-900 rounded-b-xl z-30 flex items-center justify-center">
@@ -292,72 +175,38 @@ export function PhonePreview({
           </div>
 
           {/* Title & Bio */}
-          <h2
-            className={`text-lg font-extrabold tracking-tight drop-shadow-sm mb-1 ${getTextStyleClasses()}`}
-            style={getTextStyleObject("#ffffff")}
-          >
-            {title || "Nombre de Usuario"}
-          </h2>
-          <p
-            className={`text-xs leading-relaxed mb-4 max-w-xs mx-auto drop-shadow-sm opacity-90 ${getTextStyleClasses()}`}
-            style={getTextStyleObject("#cbd5e1")}
-          >
-            {bio || "Biografía corta y descripción de enlaces."}
-          </p>
+          <div className="mb-1">
+            <h2
+              className={`text-lg font-extrabold tracking-tight ${titleTypo.className} ${titleFx.className}`}
+              style={{ ...titleTypo.style, ...titleFx.style }}
+            >
+              {title || "Nombre de Usuario"}
+            </h2>
+          </div>
+          <div className="mb-4 max-w-xs mx-auto">
+            <p
+              className={`text-xs leading-relaxed opacity-90 ${bioTypo.className} ${bioFx.className}`}
+              style={{ ...bioTypo.style, ...bioFx.style }}
+            >
+              {bio || "Biografía corta y descripción de enlaces."}
+            </p>
+          </div>
 
           {/* Social Icons Bar */}
           {renderSocialIcons()}
 
-          {/* Active Links */}
-          <div className="space-y-3 mt-4">
-            {links && links.filter(l => l.is_active).length > 0 ? (
-              links
-                .filter(l => l.is_active)
-                .map((link) => {
-                  if (isMovingLight) {
-                    const colorClass = `btn-${styleKey.replace('_', '-')}`;
-                    return (
-                      <div key={link.id} className={`btn-moving-light-container ${colorClass} ${radiusClass} w-full`}>
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={extraStyles}
-                          className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} relative z-10`}
-                        >
-                          <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                            <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
-                          </div>
-                          <span className="truncate w-full text-center px-2">{link.title}</span>
-                          <div className="w-5 h-5 shrink-0" />
-                        </a>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={extraStyles}
-                      className={`w-full py-3 px-4 font-semibold text-xs flex items-center justify-between transition-all transform hover:scale-[1.02] active:scale-95 ${radiusClass} shadow-md`}
-                    >
-                      <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                        <SocialIcon platform={link.icon || "globe"} className="w-4 h-4" />
-                      </div>
-                      <span className="truncate w-full text-center px-2">{link.title}</span>
-                      <div className="w-5 h-5 shrink-0" />
-                    </a>
-                  );
-                })
-            ) : (
-              <div className="p-4 rounded-xl bg-black/20 text-slate-400 text-xs border border-white/10">
-                Añade tus primeros enlaces en el panel izquierdo
+          {/* Active Links, Titles & Text Blocks */}
+          <LandingBlocksRenderer
+            links={links}
+            themeConfig={themeConfig}
+            compact
+            isPreview
+            emptyFallback={
+              <div className="p-4 mt-4 rounded-xl bg-black/20 text-slate-400 text-xs border border-white/10">
+                Añade tus primeros enlaces, títulos o textos en el panel izquierdo
               </div>
-            )}
-          </div>
+            }
+          />
         </div>
 
         {/* Footer / Watermark */}

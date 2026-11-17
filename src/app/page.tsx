@@ -290,7 +290,7 @@ export default function CommercialLandingPage() {
                         <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
                       )}
                       <span className={plan.features?.extended_gradients ? "" : "text-slate-500 line-through"}>
-                        Colección Extendida de Gradientes Estéticos
+                        Colección Extendida de +25 Gradientes Estéticos Móviles
                       </span>
                     </li>
                     <li className="flex items-center gap-3 text-slate-200">
@@ -300,7 +300,7 @@ export default function CommercialLandingPage() {
                         <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
                       )}
                       <span className={plan.features?.extended_buttons ? "" : "text-slate-500 line-through"}>
-                        Estilos Avanzados de Botones (Brillo, 3D, Cyberpunk)
+                        +30 Estilos de Botones PRO (Bordes de Luz Móvil, Neón, Holograma)
                       </span>
                     </li>
                     <li className="flex items-center gap-3 text-slate-200">
@@ -310,7 +310,7 @@ export default function CommercialLandingPage() {
                         <XCircle className="w-5 h-5 text-slate-600 shrink-0" />
                       )}
                       <span className={plan.features?.custom_fonts ? "" : "text-slate-500 line-through"}>
-                        Tipografías Google Fonts & Efectos de Texto
+                        Google Fonts, +20 Estilos Tipográficos & Efectos Lumínicos de Texto
                       </span>
                     </li>
                     <li className="flex items-center gap-3 text-slate-200">

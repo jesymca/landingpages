@@ -5,8 +5,23 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PhonePreview } from "@/components/PhonePreview";
-import { ThemeConfig, LinkItem, PlanFeatures } from "@/db/schema";
+import { ThemeConfig, LinkItem, LinkBlockType, PlanFeatures } from "@/db/schema";
 import { IconSelectorModal, RenderIcon, MASTER_ICONS } from "@/components/IconCatalog";
+import {
+  FREE_GRADIENTS,
+  PRO_GRADIENTS,
+  getGradientClass,
+  FREE_BUTTON_STYLES,
+  PRO_BUTTON_STYLES,
+  resolveButtonPresentation,
+  FREE_TEXT_STYLES,
+  PRO_TEXT_STYLES,
+  resolveTextTypography,
+  GOOGLE_FONTS_CATALOG,
+  resolveFontFamilyCss,
+  TEXT_EFFECTS_CATALOG,
+  resolveTextEffect,
+} from "@/lib/design-catalog";
 import {
   User,
   Link as LinkIcon,
@@ -27,7 +42,15 @@ import {
   Ticket,
   Image as ImageIcon,
   Wand2,
-  Type
+  Type,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Heading,
+  AlignLeft,
+  ShieldAlert,
+  Pencil,
+  X
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -69,10 +92,25 @@ export default function AdminDashboardPage() {
   const [landings, setLandings] = useState<any[]>([]);
   const [creatingLanding, setCreatingLanding] = useState(false);
 
-  // Links form state
+  // Links, Titles & Text Blocks form state
+  const [newBlockType, setNewBlockType] = useState<LinkBlockType>("link");
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [newLinkContent, setNewLinkContent] = useState("");
   const [newLinkIcon, setNewLinkIcon] = useState("globe");
+  const [newLinkIsAdult, setNewLinkIsAdult] = useState(false);
+
+  // Drag-and-Drop Reorder & Inline Edit State
+  const [draggedLinkId, setDraggedLinkId] = useState<string | null>(null);
+  const [dragOverLinkId, setDragOverLinkId] = useState<string | null>(null);
+  const [editingBlock, setEditingBlock] = useState<{
+    id: string;
+    block_type: LinkBlockType;
+    title: string;
+    url: string;
+    content: string;
+    is_adult: boolean;
+  } | null>(null);
 
   // Icon Modal State
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
@@ -360,10 +398,12 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Add Link
+  // Add Link, Title, or Text block
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLinkTitle || !newLinkUrl) return;
+    if (newBlockType === "link" && (!newLinkTitle.trim() || !newLinkUrl.trim())) return;
+    if (newBlockType === "title" && !newLinkTitle.trim()) return;
+    if (newBlockType === "text" && !newLinkContent.trim()) return;
 
     try {
       const res = await fetch("/api/links", {
@@ -371,9 +411,12 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           landing_id: landingId,
-          title: newLinkTitle,
-          url: newLinkUrl,
-          icon: newLinkIcon
+          block_type: newBlockType,
+          title: newBlockType === "text" ? newLinkContent.trim().slice(0, 80) : newLinkTitle.trim(),
+          url: newBlockType === "link" ? newLinkUrl.trim() : "",
+          content: newBlockType === "text" ? newLinkContent.trim() : "",
+          icon: newBlockType === "link" ? newLinkIcon : newBlockType,
+          is_adult: newBlockType === "link" ? newLinkIsAdult : false
         })
       });
 
@@ -384,11 +427,144 @@ export default function AdminDashboardPage() {
         setLinks([...links, data.link]);
         setNewLinkTitle("");
         setNewLinkUrl("");
+        setNewLinkContent("");
         setNewLinkIcon("globe");
-        showToast("✅ Enlace añadido exitosamente");
+        setNewLinkIsAdult(false);
+        const typeLabel = newBlockType === "title" ? "Título" : newBlockType === "text" ? "Texto" : "Enlace";
+        showToast(`✅ ${typeLabel} añadido exitosamente`);
       }
     } catch (err: any) {
-      showToast("❌ Error al añadir enlace");
+      showToast("❌ Error al añadir elemento");
+    }
+  };
+
+  // Persist reordered list cleanly via batch PATCH
+  const persistLinksOrder = async (reordered: LinkItem[]) => {
+    const withPositions = reordered.map((item, idx) => ({ ...item, position: idx + 1 }));
+    setLinks(withPositions);
+    try {
+      const res = await fetch("/api/links", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          landing_id: landingId,
+          ordered_ids: withPositions.map((l) => l.id)
+        })
+      });
+      if (res.ok) {
+        showToast("✅ Orden guardado en tiempo real");
+      } else {
+        showToast("❌ No se pudo guardar el orden");
+      }
+    } catch (err) {
+      showToast("❌ Error de red al reordenar");
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedLinkId(id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverLinkId !== targetId) {
+      setDragOverLinkId(targetId);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggedLinkId || e.dataTransfer.getData("text/plain");
+    setDraggedLinkId(null);
+    setDragOverLinkId(null);
+
+    if (!sourceId || sourceId === targetId) return;
+
+    const fromIndex = links.findIndex((l) => l.id === sourceId);
+    const toIndex = links.findIndex((l) => l.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const reordered = [...links];
+    const [movedItem] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, movedItem);
+
+    await persistLinksOrder(reordered);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedLinkId(null);
+    setDragOverLinkId(null);
+  };
+
+  const handleMoveLinkStep = async (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= links.length) return;
+    const reordered = [...links];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    await persistLinksOrder(reordered);
+  };
+
+  // Toggle +18 Adult warning on existing link
+  const handleToggleAdult = async (id: string, is_adult: boolean) => {
+    try {
+      setLinks(links.map((l) => (l.id === id ? { ...l, is_adult: is_adult ? 1 : 0 } : l)));
+      await fetch("/api/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_adult })
+      });
+      showToast(is_adult ? "🔞 Aviso +18 activado para este enlace" : "✅ Aviso +18 desactivado");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Save edited title/url/content/is_adult
+  const handleSaveEditBlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBlock) return;
+    try {
+      const nextTitle = editingBlock.block_type === "text"
+        ? editingBlock.content.trim().slice(0, 80)
+        : editingBlock.title.trim();
+      const nextContent = editingBlock.block_type === "text" ? editingBlock.content.trim() : "";
+      const nextUrl = editingBlock.block_type === "link" ? editingBlock.url.trim() : "";
+
+      const res = await fetch("/api/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingBlock.id,
+          title: nextTitle,
+          url: nextUrl,
+          content: nextContent,
+          is_adult: editingBlock.is_adult
+        })
+      });
+
+      if (res.ok) {
+        setLinks(links.map((l) =>
+          l.id === editingBlock.id
+            ? {
+                ...l,
+                title: nextTitle,
+                url: nextUrl,
+                content: nextContent,
+                is_adult: editingBlock.is_adult ? 1 : 0
+              }
+            : l
+        ));
+        setEditingBlock(null);
+        showToast("✅ Elemento actualizado");
+      } else {
+        showToast("❌ Error al actualizar elemento");
+      }
+    } catch (err) {
+      showToast("❌ Error de red al actualizar");
     }
   };
 
@@ -445,7 +621,7 @@ export default function AdminDashboardPage() {
     try {
       setLinks(links.filter(l => l.id !== id));
       await fetch(`/api/links?id=${id}`, { method: "DELETE" });
-      showToast("🗑️ Enlace eliminado");
+      showToast("🗑️ Elemento eliminado");
     } catch (err) {
       console.error(err);
     }
@@ -560,8 +736,23 @@ export default function AdminDashboardPage() {
   const totalDaysCycle = 30; // base visual percentage
   const subscriptionPercent = isPaidUnlimited ? 100 : Math.min(100, Math.max(0, Math.round((daysRemaining / totalDaysCycle) * 100)));
 
-  const features: PlanFeatures = (isPaidActive && planData?.features_json)
-    ? planData.features_json
+  const features: PlanFeatures = isPaidActive
+    ? {
+        video_background: true,
+        remove_watermark: true,
+        unlimited_links: true,
+        premium_themes: true,
+        custom_fonts: true,
+        social_icons: true,
+        max_links: 999,
+        all_icons: true,
+        max_landing_pages: 999,
+        custom_image_upload: true,
+        image_effects: true,
+        extended_gradients: true,
+        extended_buttons: true,
+        ...(planData?.features_json || {}),
+      }
     : {
         video_background: false,
         remove_watermark: false,
@@ -575,7 +766,8 @@ export default function AdminDashboardPage() {
         custom_image_upload: false,
         image_effects: false,
         extended_gradients: false,
-        extended_buttons: false
+        extended_buttons: false,
+        ...(planData?.features_json || {}),
       };
 
   return (
@@ -875,143 +1067,468 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* TAB 2: ENLACES */}
+          {/* TAB 2: ENLACES, TÍTULOS Y TEXTOS */}
           {activeTab === "links" && (
             <div className="space-y-6">
-              {/* Add Link Form */}
+              {/* Add Content Block Form (Enlace / Título / Texto) */}
               <div className="glass-panel p-6 rounded-3xl space-y-4 border border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white">Añadir Nuevo Enlace</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-white">
+                    {newBlockType === "link"
+                      ? "Añadir Nuevo Enlace"
+                      : newBlockType === "title"
+                      ? "Añadir Nuevo Título"
+                      : "Añadir Nuevo Texto"}
+                  </h3>
                   <span className="text-xs text-slate-400">
-                    Límite Plan: <strong>{links.length} / {features.max_links >= 999 ? "∞" : features.max_links}</strong>
+                    Límite Enlaces: <strong>{links.filter(l => (l.block_type || "link") === "link").length} / {features.max_links >= 999 ? "∞" : features.max_links}</strong>
                   </span>
                 </div>
 
+                {/* Block Type Selector Tabs */}
+                <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl bg-slate-900 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setNewBlockType("link")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      newBlockType === "link"
+                        ? "bg-indigo-600 text-white shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    <span>Enlace</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewBlockType("title")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      newBlockType === "title"
+                        ? "bg-cyan-600 text-white shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Heading className="w-3.5 h-3.5" />
+                    <span>Añadir Título</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewBlockType("text")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      newBlockType === "text"
+                        ? "bg-emerald-600 text-white shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <AlignLeft className="w-3.5 h-3.5" />
+                    <span>Añadir Texto</span>
+                  </button>
+                </div>
+
                 <form onSubmit={handleAddLink} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Título del Enlace
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newLinkTitle}
-                      onChange={(e) => setNewLinkTitle(e.target.value)}
-                      placeholder="Ej: Mi Instagram / Mi Canal de YouTube / Mi WhatsApp"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      URL de Destino
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={newLinkUrl}
-                      onChange={(e) => setNewLinkUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Ícono Característico
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingLinkId(null);
-                        setIsIconModalOpen(true);
-                      }}
-                      className="w-full flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 hover:border-indigo-500 transition-all group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
-                          <RenderIcon iconId={newLinkIcon} className="w-4 h-4" />
-                        </div>
-                        <span className="font-semibold text-white">
-                          {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.name || "Sitio Web"}
-                        </span>
-                        {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.isPro && (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-500 text-[9px] font-extrabold text-slate-950">
-                            PRO
-                          </span>
-                        )}
+                  {newBlockType === "link" && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                          Título del Enlace
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newLinkTitle}
+                          onChange={(e) => setNewLinkTitle(e.target.value)}
+                          placeholder="Ej: Mi Instagram / Mi Canal de YouTube / Mi WhatsApp"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+                        />
                       </div>
-                      <span className="text-xs text-indigo-400 font-bold group-hover:underline">
-                        Cambiar Ícono (+60 Disponibles) →
-                      </span>
-                    </button>
-                  </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                          URL de Destino
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          value={newLinkUrl}
+                          onChange={(e) => setNewLinkUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                          Ícono Característico
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingLinkId(null);
+                            setIsIconModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 hover:border-indigo-500 transition-all group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
+                              <RenderIcon iconId={newLinkIcon} className="w-4 h-4" />
+                            </div>
+                            <span className="font-semibold text-white">
+                              {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.name || "Sitio Web"}
+                            </span>
+                            {MASTER_ICONS.find(i => i.id.toLowerCase() === newLinkIcon.toLowerCase())?.isPro && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500 text-[9px] font-extrabold text-slate-950">
+                                PRO
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-indigo-400 font-bold group-hover:underline">
+                            Cambiar Ícono (+60 Disponibles) →
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* +18 Adult Content Toggle */}
+                      <div className="p-3.5 rounded-2xl bg-rose-500/5 border border-rose-500/25 flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-2.5">
+                          <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-rose-200">
+                              🔞 Contenido solo para mayores de 18 años (+18)
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              Si se activa, el visitante verá una advertencia de mayoría de edad antes de dirigirse a esta web.
+                            </p>
+                          </div>
+                        </div>
+
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={newLinkIsAdult}
+                            onChange={(e) => setNewLinkIsAdult(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600" />
+                        </label>
+                      </div>
+                    </>
+                  )}
+
+                  {newBlockType === "title" && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                        Texto del Título o Sección
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newLinkTitle}
+                        onChange={(e) => setNewLinkTitle(e.target.value)}
+                        placeholder="Ej: Mis Redes Sociales / Catálogo VIP / Contacto Directo"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  )}
+
+                  {newBlockType === "text" && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                        Contenido del Bloque de Texto
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={newLinkContent}
+                        onChange={(e) => setNewLinkContent(e.target.value)}
+                        placeholder="Ej: Atención al cliente de Lunes a Sábado. ¡Escríbeme para cotizaciones!"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 mt-2"
+                    className={`w-full py-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md mt-2 transition-all ${
+                      newBlockType === "title"
+                        ? "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-600/30"
+                        : newBlockType === "text"
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/30"
+                        : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-600/30"
+                    }`}
                   >
-                    <Plus className="w-4 h-4" /> Añadir Enlace
+                    <Plus className="w-4 h-4" />
+                    {newBlockType === "title"
+                      ? "Añadir Título"
+                      : newBlockType === "text"
+                      ? "Añadir Texto"
+                      : "Añadir Enlace"}
                   </button>
                 </form>
               </div>
 
-              {/* Links List */}
+              {/* Links, Titles & Texts List (Draggable) */}
               <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">
-                  Tus Enlaces Configurados
-                </h4>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Tus Enlaces Configurados ({links.length})
+                  </h4>
+                  <span className="text-[11px] text-indigo-300 flex items-center gap-1">
+                    <GripVertical className="w-3.5 h-3.5" /> Arrastra para reorganizar el orden
+                  </span>
+                </div>
 
-                {links.map((link) => (
-                  <div
-                    key={link.id}
-                    className="glass-panel p-4 rounded-2xl border border-slate-800 flex items-center justify-between gap-4"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingLinkId(link.id);
-                        setIsIconModalOpen(true);
-                      }}
-                      className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 flex items-center justify-center text-indigo-400 shrink-0 transition-all group relative"
-                      title="Hacer clic para cambiar ícono"
-                    >
-                      <RenderIcon iconId={link.icon || "globe"} className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-indigo-600 text-[9px] text-white flex items-center justify-center font-bold shadow">
-                        ✎
-                      </span>
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold text-white truncate">{link.title}</p>
-                        <span className="text-[10px] text-slate-500 font-mono">({link.icon || "globe"})</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate font-mono">{link.url}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {/* Active Toggle Switch */}
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(link.is_active)}
-                          onChange={(e) => handleToggleLink(link.id, e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600" />
-                      </label>
-
-                      <button
-                        onClick={() => handleDeleteLink(link.id)}
-                        className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                {links.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 bg-slate-900/50 rounded-2xl border border-slate-800">
+                    Aún no has añadido enlaces, títulos ni bloques de texto.
                   </div>
-                ))}
+                ) : (
+                  links.map((link, index) => {
+                    const bType = (link.block_type || "link") as LinkBlockType;
+                    const isDraggingThis = draggedLinkId === link.id;
+                    const isDragOverThis = dragOverLinkId === link.id && draggedLinkId !== link.id;
+                    const isEditingThis = editingBlock?.id === link.id;
+
+                    return (
+                      <div
+                        key={link.id}
+                        draggable={!isEditingThis}
+                        onDragStart={(e) => handleDragStart(e, link.id)}
+                        onDragOver={(e) => handleDragOver(e, link.id)}
+                        onDrop={(e) => handleDrop(e, link.id)}
+                        onDragEnd={handleDragEnd}
+                        className={`glass-panel p-4 rounded-2xl border transition-all ${
+                          isDragOverThis
+                            ? "border-indigo-400 ring-2 ring-indigo-500/40 bg-indigo-500/10 scale-[1.01]"
+                            : isDraggingThis
+                            ? "opacity-45 border-dashed border-indigo-500 scale-[0.98]"
+                            : bType === "title"
+                            ? "border-cyan-500/30 bg-cyan-950/10"
+                            : bType === "text"
+                            ? "border-emerald-500/30 bg-emerald-950/10"
+                            : "border-slate-800"
+                        }`}
+                      >
+                        {isEditingThis && editingBlock ? (
+                          <form onSubmit={handleSaveEditBlock} className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-indigo-300">
+                                Editando {bType === "title" ? "Título" : bType === "text" ? "Texto" : "Enlace"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingBlock(null)}
+                                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {bType === "text" ? (
+                              <textarea
+                                rows={3}
+                                required
+                                value={editingBlock.content}
+                                onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white"
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                required
+                                value={editingBlock.title}
+                                onChange={(e) => setEditingBlock({ ...editingBlock, title: e.target.value })}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white"
+                              />
+                            )}
+
+                            {bType === "link" && (
+                              <>
+                                <input
+                                  type="url"
+                                  required
+                                  value={editingBlock.url}
+                                  onChange={(e) => setEditingBlock({ ...editingBlock, url: e.target.value })}
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 px-3 text-xs text-white font-mono"
+                                />
+                                <label className="flex items-center gap-2 text-xs text-rose-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingBlock.is_adult}
+                                    onChange={(e) => setEditingBlock({ ...editingBlock, is_adult: e.target.checked })}
+                                    className="rounded border-slate-700"
+                                  />
+                                  <span>🔞 Contenido solo apto para mayores de 18 años (+18)</span>
+                                </label>
+                              </>
+                            )}
+
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setEditingBlock(null)}
+                                className="px-3 py-1.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="submit"
+                                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white"
+                              >
+                                Guardar
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            {/* Drag Handle + Quick Up/Down */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-slate-800/70 cursor-grab active:cursor-grabbing transition-colors"
+                                title="Seleccionar y arrastrar para reordenar"
+                              >
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveLinkStep(index, -1)}
+                                  disabled={index === 0}
+                                  className="p-0.5 rounded text-slate-500 hover:text-white disabled:opacity-20"
+                                  title="Subir"
+                                >
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveLinkStep(index, 1)}
+                                  disabled={index === links.length - 1}
+                                  className="p-0.5 rounded text-slate-500 hover:text-white disabled:opacity-20"
+                                  title="Bajar"
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Icon / Block Badge */}
+                            {bType === "link" ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLinkId(link.id);
+                                  setIsIconModalOpen(true);
+                                }}
+                                className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 flex items-center justify-center text-indigo-400 shrink-0 transition-all group relative"
+                                title="Hacer clic para cambiar ícono"
+                              >
+                                <RenderIcon iconId={link.icon || "globe"} className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-indigo-600 text-[9px] text-white flex items-center justify-center font-bold shadow">
+                                  ✎
+                                </span>
+                              </button>
+                            ) : bType === "title" ? (
+                              <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 shrink-0">
+                                <Heading className="w-5 h-5" />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0">
+                                <AlignLeft className="w-5 h-5" />
+                              </div>
+                            )}
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                    bType === "title"
+                                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                                      : bType === "text"
+                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                      : "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                                  }`}
+                                >
+                                  {bType === "title" ? "Título" : bType === "text" ? "Texto" : "Enlace"}
+                                </span>
+                                <p className="text-xs font-bold text-white truncate">
+                                  {bType === "text" ? (link.content || link.title) : link.title}
+                                </p>
+                                {bType === "link" && Boolean(link.is_adult) && (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-600/25 text-rose-300 border border-rose-500/40 text-[9px] font-black">
+                                    🔞 +18
+                                  </span>
+                                )}
+                              </div>
+                              {bType === "link" ? (
+                                <p className="text-[11px] text-slate-400 truncate font-mono mt-0.5">{link.url}</p>
+                              ) : bType === "text" ? (
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">Bloque de texto informativo</p>
+                              ) : (
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">Encabezado separador</p>
+                              )}
+                            </div>
+
+                            {/* Actions (+18 quick toggle, Edit, Active Toggle, Delete) */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {bType === "link" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAdult(link.id, !Boolean(link.is_adult))}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all ${
+                                    Boolean(link.is_adult)
+                                      ? "bg-rose-600 text-white border-rose-500 shadow shadow-rose-600/30"
+                                      : "bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-300"
+                                  }`}
+                                  title="Activar/desactivar advertencia +18"
+                                >
+                                  +18
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingBlock({
+                                    id: link.id,
+                                    block_type: bType,
+                                    title: link.title,
+                                    url: link.url || "",
+                                    content: link.content || link.title,
+                                    is_adult: Boolean(link.is_adult)
+                                  })
+                                }
+                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Active Toggle Switch */}
+                              <label className="relative inline-flex items-center cursor-pointer" title="Mostrar u ocultar">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(link.is_active)}
+                                  onChange={(e) => handleToggleLink(link.id, e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600" />
+                              </label>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLink(link.id)}
+                                className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1156,72 +1673,88 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Gradient Presets */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">
-                      Colección de Gradientes Estéticos
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      {/* Basic FREE Gradients */}
-                      {[
-                        { name: "Indigo Noche", value: "from-slate-900 via-indigo-950 to-purple-950", isPro: false },
-                        { name: "Atardecer Neón", value: "from-purple-900 via-pink-900 to-rose-950", isPro: false },
-                        { name: "Bosque Profundo", value: "from-emerald-950 via-teal-950 to-slate-900", isPro: false },
-                        { name: "Cian Eléctrico", value: "from-blue-950 via-cyan-950 to-slate-900", isPro: false },
-                        { name: "Oscuro Minimal", value: "from-slate-950 via-slate-900 to-zinc-950", isPro: false },
-                      ].map((g) => (
-                        <button
-                          key={g.value}
-                          type="button"
-                          onClick={() => setBackgroundUrl(g.value)}
-                          className={`p-3 rounded-xl border text-xs font-medium text-left truncate transition-all ${
-                            backgroundUrl === g.value ? "border-indigo-500 ring-1 ring-indigo-500 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
-                          }`}
-                        >
-                          {g.name}
-                        </button>
-                      ))}
-
-                      {/* Extended PRO Gradients */}
-                      {[
-                        { name: "🌊 Mar en Movimiento", value: "anim_ocean", isPro: true },
-                        { name: "💨 Humo Cósmico", value: "anim_smoke", isPro: true },
-                        { name: "🌧️ Lluvia & Gotas", value: "anim_rain", isPro: true },
-                        { name: "🌌 Aurora Boreal", value: "anim_aurora", isPro: true },
-                        { name: "🔥 Fuego Vivo", value: "anim_fire", isPro: true },
-                        { name: "⚡ Cyberpunk Pulse", value: "anim_cyber", isPro: true },
-                        { name: "Vaporwave Sunset", value: "from-pink-600 via-purple-700 to-indigo-900", isPro: true },
-                        { name: "Cyberpunk Violet", value: "from-fuchsia-900 via-violet-950 to-slate-950", isPro: true },
-                        { name: "Golden Luxury", value: "from-amber-900 via-yellow-950 to-stone-950", isPro: true },
-                        { name: "Crimson Fire", value: "from-red-900 via-rose-950 to-slate-950", isPro: true },
-                        { name: "Ocean Depth", value: "from-teal-900 via-blue-950 to-slate-950", isPro: true },
-                      ].map((g) => (
-                        <button
-                          key={g.value}
-                          type="button"
-                          onClick={() => {
-                            if (!features.extended_gradients && g.isPro) {
-                              showToast("🔒 Los gradientes estéticos extendidos requieren el Plan PAGO PRO.");
-                              return;
-                            }
-                            setBackgroundUrl(g.value);
-                          }}
-                          className={`relative p-3 rounded-xl border text-xs font-medium text-left truncate transition-all ${
-                            backgroundUrl === g.value
-                              ? "border-amber-500 ring-1 ring-amber-500 text-white"
-                              : features.extended_gradients || !g.isPro
-                              ? "border-slate-800 text-slate-400 hover:border-slate-700"
-                              : "border-slate-800/60 text-slate-500 bg-slate-950/50 opacity-80"
-                          }`}
-                        >
-                          <span>{g.name}</span>
-                          {g.isPro && (
-                            <span className="absolute top-1 right-1 px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-slate-950">
-                              PRO
+                  {/* Gradient Presets with Live Visual Preview inside each selection button */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-2">
+                        Colección de Gradientes Básicos (¡Gratis!)
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {FREE_GRADIENTS.map((g) => (
+                          <button
+                            key={g.value}
+                            type="button"
+                            onClick={() => {
+                              const { gradient_color_start, gradient_color_end, ...restConfig } = themeConfig;
+                              setThemeConfig(restConfig);
+                              setBackgroundUrl(g.value);
+                            }}
+                            className={`relative h-16 rounded-xl overflow-hidden border text-left p-2 flex items-end transition-all group ${
+                              backgroundUrl === g.value
+                                ? "border-indigo-400 ring-2 ring-indigo-500 shadow-lg"
+                                : "border-slate-800 hover:border-slate-600"
+                            }`}
+                          >
+                            <div className={`absolute inset-0 ${getGradientClass(g.value)} group-hover:scale-105 transition-transform duration-300`} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                            <span className="relative z-10 text-[11px] font-bold text-white truncate drop-shadow">
+                              {g.name}
                             </span>
-                          )}
-                        </button>
-                      ))}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Colección de Gradientes Estéticos Móviles ({PRO_GRADIENTS.length} PRO)
+                        </label>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                          Vista previa en vivo
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                        {PRO_GRADIENTS.map((g) => (
+                          <button
+                            key={g.value}
+                            type="button"
+                            onClick={() => {
+                              if (!features.extended_gradients && g.isPro) {
+                                showToast("🔒 Los gradientes estéticos extendidos requieren el Plan PAGO PRO.");
+                                return;
+                              }
+                              const { gradient_color_start, gradient_color_end, ...restConfig } = themeConfig;
+                              setThemeConfig(restConfig);
+                              setBackgroundUrl(g.value);
+                            }}
+                            className={`relative h-16 rounded-xl overflow-hidden border text-left p-2 flex items-end transition-all group ${
+                              backgroundUrl === g.value
+                                ? "border-amber-400 ring-2 ring-amber-500 shadow-lg shadow-amber-500/20"
+                                : features.extended_gradients
+                                ? "border-slate-700/80 hover:border-amber-500/60"
+                                : "border-slate-800/80 opacity-85"
+                            }`}
+                          >
+                            <div className={`absolute inset-0 ${getGradientClass(g.value)}`} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+                            <span className="relative z-10 text-[11px] font-bold text-white truncate drop-shadow">
+                              {g.name}
+                            </span>
+                            <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+                              {g.isAnimated && (
+                                <span className="px-1 py-0.5 rounded bg-black/60 backdrop-blur-sm text-[8px] font-bold text-cyan-300 border border-cyan-500/30">
+                                  MÓVIL
+                                </span>
+                              )}
+                              <span className="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-slate-950 shadow">
+                                PRO
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1366,68 +1899,107 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* Button Style Picker */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">
-                  Estilo de Botones
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {/* Gratis Basic Button Styles */}
-                  {[
-                    { key: "rounded", label: "Redondeado", isPro: false },
-                    { key: "pill", label: "Píldora", isPro: false },
-                    { key: "glass", label: "Cristal Glass", isPro: false },
-                    { key: "outline", label: "Contorno", isPro: false },
-                  ].map((st) => (
-                    <button
-                      key={st.key}
-                      type="button"
-                      onClick={() => setThemeConfig({ ...themeConfig, button_style: st.key as any })}
-                      className={`p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        themeConfig.button_style === st.key ? "border-indigo-500 bg-indigo-500/10 text-white" : "border-slate-800 text-slate-400 hover:border-slate-700"
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
+              {/* Button Style Picker with Live Preview in Every Selection Card */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Estilo de Botones (Gratis + {PRO_BUTTON_STYLES.length} Estilos PRO Animados & Iluminados)
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                    Previsualización en vivo
+                  </span>
+                </div>
 
-                  {/* PRO Extended Button Styles & Moving Lights */}
-                  {[
-                    { key: "moving_light_cyan", label: "✨ Luz Cian", isPro: true },
-                    { key: "moving_light_gold", label: "✨ Luz Oro", isPro: true },
-                    { key: "moving_light_emerald", label: "✨ Luz Esmeralda", isPro: true },
-                    { key: "moving_light_crimson", label: "✨ Luz Carmesí", isPro: true },
-                    { key: "moving_light_purple", label: "✨ Luz Púrpura", isPro: true },
-                    { key: "glow", label: "Brillo Neón", isPro: true },
-                    { key: "shadow", label: "Sombra 3D", isPro: true },
-                    { key: "square", label: "Cuadrado", isPro: true },
-                    { key: "gradient_border", label: "Borde Gradiente", isPro: true },
-                    { key: "cyber_neon", label: "Cyberpunk", isPro: true },
-                  ].map((st) => (
-                    <button
-                      key={st.key}
-                      type="button"
-                      onClick={() => {
-                        if (!features.extended_buttons && st.isPro) {
-                          showToast("🔒 Los estilos de botones avanzados requieren el Plan PAGO PRO.");
-                          return;
-                        }
-                        setThemeConfig({ ...themeConfig, button_style: st.key as any });
-                      }}
-                      className={`relative p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                        themeConfig.button_style === st.key
-                          ? "border-amber-500 bg-amber-500/10 text-white"
-                          : features.extended_buttons || !st.isPro
-                          ? "border-slate-800 text-slate-400 hover:border-slate-700"
-                          : "border-slate-800/60 text-slate-500 bg-slate-950/50"
-                      }`}
-                    >
-                      <span>{st.label}</span>
-                      {st.isPro && (
-                        <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-bold">PRO</span>
-                      )}
-                    </button>
-                  ))}
+                {/* Gratis Basic Button Styles */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {FREE_BUTTON_STYLES.map((st) => {
+                    const previewBtn = resolveButtonPresentation(
+                      st.key,
+                      themeConfig.button_bg || "#4f46e5",
+                      themeConfig.button_text_color || "#ffffff"
+                    );
+                    const isSelected = themeConfig.button_style === st.key;
+                    return (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => setThemeConfig({ ...themeConfig, button_style: st.key })}
+                        className={`p-2.5 rounded-2xl border bg-slate-950/80 flex flex-col items-center gap-2 transition-all ${
+                          isSelected
+                            ? "border-indigo-500 ring-1 ring-indigo-500"
+                            : "border-slate-800 hover:border-slate-700"
+                        }`}
+                      >
+                        <div
+                          style={previewBtn.extraStyles}
+                          className={`w-full py-2 px-2 text-[11px] font-bold text-center truncate ${previewBtn.radiusClass}`}
+                        >
+                          {st.label}
+                        </div>
+                        <span className="text-[10px] text-emerald-300 font-semibold">Gratis</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* PRO Animated, Illuminated & Verified Classic Button Styles */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1 pt-1">
+                  {PRO_BUTTON_STYLES.map((st) => {
+                    const previewBtn = resolveButtonPresentation(
+                      st.key,
+                      themeConfig.button_bg || "#4f46e5",
+                      themeConfig.button_text_color || "#ffffff"
+                    );
+                    const isSelected = themeConfig.button_style === st.key;
+
+                    const innerButtonSample = (
+                      <div
+                        style={previewBtn.extraStyles}
+                        className={`w-full py-2.5 px-3 text-[11px] font-bold text-center truncate ${previewBtn.radiusClass} ${previewBtn.fxClass} ${
+                          previewBtn.usesConicWrapper ? "relative z-10" : ""
+                        }`}
+                      >
+                        {st.label}
+                      </div>
+                    );
+
+                    return (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => {
+                          if (!features.extended_buttons && st.isPro) {
+                            showToast("🔒 Los estilos de botones avanzados requieren el Plan PAGO PRO.");
+                            return;
+                          }
+                          setThemeConfig({ ...themeConfig, button_style: st.key });
+                        }}
+                        className={`relative p-3 rounded-2xl border bg-slate-950/90 flex flex-col items-center gap-2 transition-all ${
+                          isSelected
+                            ? "border-amber-500 ring-2 ring-amber-500/70 bg-amber-500/10"
+                            : features.extended_buttons
+                            ? "border-slate-800 hover:border-amber-500/50"
+                            : "border-slate-800/60 opacity-85"
+                        }`}
+                      >
+                        <div className="w-full pointer-events-none">
+                          {previewBtn.usesConicWrapper ? (
+                            <div className={`${previewBtn.wrapperClass} w-full`}>{innerButtonSample}</div>
+                          ) : (
+                            innerButtonSample
+                          )}
+                        </div>
+                        <div className="w-full flex items-center justify-between text-[10px] px-0.5">
+                          <span className={st.isAnimated ? "text-cyan-300 font-semibold" : "text-slate-400"}>
+                            {st.isAnimated ? "⚡ Animado" : "Clásico"}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500 text-[8px] font-black text-slate-950">
+                            PRO
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1449,106 +2021,196 @@ export default function AdminDashboardPage() {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {[
-                      { key: "normal", label: "Normal", class: "font-normal" },
-                      { key: "bold", label: "Negrita (B)", class: "font-bold" },
-                      { key: "italic", label: "Cursiva (I)", class: "italic" },
-                      { key: "bold_italic", label: "Negrita Cursiva (B+I)", class: "font-bold italic" },
-                    ].map((f) => (
-                      <button
-                        key={f.key}
-                        type="button"
-                        onClick={() => setThemeConfig({ ...themeConfig, text_style: f.key })}
-                        className={`p-2.5 rounded-xl border text-xs ${f.class} transition-all ${
-                          (themeConfig.text_style || "normal") === f.key
-                            ? "border-indigo-500 bg-indigo-500/10 text-white"
-                            : "border-slate-800 text-slate-400 hover:border-slate-700"
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+                    {FREE_TEXT_STYLES.map((f) => {
+                      const typo = resolveTextTypography(f.key, true);
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setThemeConfig({ ...themeConfig, text_style: f.key })}
+                          className={`p-2.5 rounded-xl border text-xs transition-all flex flex-col items-center gap-1 ${
+                            (themeConfig.text_style || "normal") === f.key
+                              ? "border-indigo-500 bg-indigo-500/10 text-white"
+                              : "border-slate-800 text-slate-400 hover:border-slate-700"
+                          }`}
+                        >
+                          <span className={typo.className} style={typo.style}>
+                            {f.sample}
+                          </span>
+                          <span className="text-[10px] opacity-75">{f.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* PRO Google Fonts */}
+                {/* 20 PRO Advanced Typography Styles */}
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> 20 Efectos de Estilo Tipográfico (PRO)
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                      PRO · VISTA PREVIA
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+                    {PRO_TEXT_STYLES.map((st) => {
+                      const typo = resolveTextTypography(st.key, true);
+                      const isSelected = themeConfig.text_style === st.key;
+                      return (
+                        <button
+                          key={st.key}
+                          type="button"
+                          onClick={() => {
+                            if (!features.custom_fonts && st.isPro) {
+                              showToast("🔒 Los estilos tipográficos PRO requieren el Plan PAGO PRO.");
+                              return;
+                            }
+                            setThemeConfig({ ...themeConfig, text_style: st.key });
+                          }}
+                          className={`relative p-3 rounded-xl border bg-slate-950/90 flex flex-col items-center justify-center gap-1.5 transition-all ${
+                            isSelected
+                              ? "border-amber-500 ring-1 ring-amber-500 bg-amber-500/10 text-white"
+                              : features.custom_fonts
+                              ? "border-slate-800 text-slate-200 hover:border-amber-500/50"
+                              : "border-slate-800/60 text-slate-400 opacity-80"
+                          }`}
+                        >
+                          <span className={`text-xs ${typo.className}`} style={typo.style}>
+                            {st.sample}
+                          </span>
+                          <span className="text-[10px] text-slate-400 truncate max-w-full">{st.label}</span>
+                          <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-black">PRO</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* PRO Google Fonts with Real Live Font Previews Before Selecting */}
                 <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-400" /> Fuentes Tipográficas Google Fonts (PRO)
                     </span>
                     <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
-                      PRO
+                      PREVIO EN VIVO
                     </span>
                   </div>
 
-                  <select
-                    value={themeConfig.font_family || "default"}
-                    onChange={(e) => {
-                      if (!features.custom_fonts && e.target.value !== "default") {
-                        showToast("🔒 Cambiar fuentes tipográficas requiere el Plan PAGO PRO.");
-                        return;
-                      }
-                      setThemeConfig({ ...themeConfig, font_family: e.target.value });
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="default">Fuente Predeterminada (Sistema)</option>
-                    <option value="Inter">Inter (Moderna & Limpia)</option>
-                    <option value="Outfit">Outfit (Moderna Tech)</option>
-                    <option value="Roboto">Roboto (Clásica)</option>
-                    <option value="Montserrat">Montserrat (Geométrica)</option>
-                    <option value="Poppins">Poppins (Redondeada Popular)</option>
-                    <option value="Playfair Display">Playfair Display (Elegante / Editorial)</option>
-                    <option value="Cinzel">Cinzel (Lujo / Clásica Romana)</option>
-                    <option value="Space Grotesk">Space Grotesk (Futurista / Tech)</option>
-                    <option value="Dancing Script">Dancing Script (Manuscrita / Cursiva)</option>
-                    <option value="Permanent Marker">Permanent Marker (Urbana / Marcador)</option>
-                    <option value="Fira Code">Fira Code (Código / Developer)</option>
-                  </select>
+                  {/* Active Font Indicator */}
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Fuente Actual Seleccionada:</span>
+                      <span
+                        className="text-sm font-bold text-amber-300"
+                        style={{ fontFamily: resolveFontFamilyCss(themeConfig.font_family) }}
+                      >
+                        {GOOGLE_FONTS_CATALOG.find(f => f.value === (themeConfig.font_family || "default"))?.label || themeConfig.font_family || "Sistema"} — Vista Previa Real
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Visual Pre-Selection Font Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {GOOGLE_FONTS_CATALOG.map((font) => {
+                      const isSelected = (themeConfig.font_family || "default") === font.value;
+                      return (
+                        <button
+                          key={font.value}
+                          type="button"
+                          onClick={() => {
+                            if (!features.custom_fonts && font.isPro) {
+                              showToast("🔒 Cambiar fuentes tipográficas requiere el Plan PAGO PRO.");
+                              return;
+                            }
+                            setThemeConfig({ ...themeConfig, font_family: font.value });
+                          }}
+                          className={`relative p-3 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? "border-amber-500 ring-1 ring-amber-500 bg-amber-500/10"
+                              : "border-slate-800 bg-slate-950/90 hover:border-amber-500/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[11px] font-bold text-slate-200">{font.label}</span>
+                            <span
+                              className={`text-[8px] px-1.5 py-0.5 rounded font-black ${
+                                font.isPro
+                                  ? "bg-amber-500 text-slate-950"
+                                  : "bg-emerald-500/20 text-emerald-300"
+                              }`}
+                            >
+                              {font.isPro ? "PRO" : "GRATIS"}
+                            </span>
+                          </div>
+                          <p
+                            className="text-sm text-white truncate"
+                            style={{ fontFamily: resolveFontFamilyCss(font.value) }}
+                          >
+                            {font.sample}
+                          </p>
+                          <span className="text-[10px] text-slate-500">{font.category}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* PRO Text Visual Effects */}
+                {/* PRO Text Visual Effects (Existing + 10 Animated & Illuminated with Live Pre-Selection Preview) */}
                 <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" /> Efectos Visuales de Texto (PRO)
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Efectos Visuales de Texto ({TEXT_EFFECTS_CATALOG.length - 1} PRO Móviles & Lumínicos)
                     </span>
                     <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
-                      PRO
+                      PREVIO EN VIVO
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[
-                      { key: "none", label: "Sin Efecto", isPro: false },
-                      { key: "glow", label: "Resplandor Neón", isPro: true },
-                      { key: "shadow_3d", label: "Sombra 3D", isPro: true },
-                      { key: "gradient_text", label: "Texto Gradiente", isPro: true },
-                      { key: "neon_flicker", label: "Parpadeo Neón", isPro: true },
-                    ].map((eff) => (
-                      <button
-                        key={eff.key}
-                        type="button"
-                        onClick={() => {
-                          if (eff.isPro && !features.custom_fonts) {
-                            showToast("🔒 Los efectos visuales de texto requieren el Plan PAGO PRO.");
-                            return;
-                          }
-                          setThemeConfig({ ...themeConfig, text_effect: eff.key });
-                        }}
-                        className={`relative p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                          (themeConfig.text_effect || "none") === eff.key
-                            ? "border-amber-500 bg-amber-500/10 text-white"
-                            : "border-slate-800 text-slate-400 hover:border-slate-700"
-                        }`}
-                      >
-                        <span>{eff.label}</span>
-                        {eff.isPro && (
-                          <span className="absolute top-1 right-1 text-[8px] text-amber-400 font-bold">PRO</span>
-                        )}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                    {TEXT_EFFECTS_CATALOG.map((eff) => {
+                      const previewFx = resolveTextEffect(eff.key, "#ffffff", "#ffffff", "normal");
+                      const isSelected = (themeConfig.text_effect || "none") === eff.key;
+                      return (
+                        <button
+                          key={eff.key}
+                          type="button"
+                          onClick={() => {
+                            if (eff.isPro && !features.custom_fonts) {
+                              showToast("🔒 Los efectos visuales de texto requieren el Plan PAGO PRO.");
+                              return;
+                            }
+                            setThemeConfig({ ...themeConfig, text_effect: eff.key });
+                          }}
+                          className={`relative p-3 rounded-xl border bg-slate-950 flex flex-col items-center justify-center gap-1.5 transition-all ${
+                            isSelected
+                              ? "border-amber-500 ring-1 ring-amber-500 bg-amber-500/10"
+                              : features.custom_fonts || !eff.isPro
+                              ? "border-slate-800 hover:border-amber-500/50"
+                              : "border-slate-800/60 opacity-85"
+                          }`}
+                        >
+                          <span
+                            className={`text-sm font-black tracking-tight ${previewFx.className}`}
+                            style={previewFx.style}
+                          >
+                            {eff.sample}
+                          </span>
+                          <span className="text-[10px] text-slate-400 truncate max-w-full">{eff.label}</span>
+                          {eff.isPro && (
+                            <div className="absolute top-1 right-1 flex items-center gap-0.5">
+                              {eff.isAnimated && (
+                                <span className="text-[8px] text-cyan-300 font-bold">⚡</span>
+                              )}
+                              <span className="text-[8px] text-amber-400 font-black">PRO</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

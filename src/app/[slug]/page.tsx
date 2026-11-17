@@ -1,10 +1,18 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { dbClient } from "@/db";
+import { dbClient, ensurePaymentColumns } from "@/db";
 import { ThemeConfig, LinkItem } from "@/db/schema";
 import { SocialIcon } from "@/components/SocialIcons";
+import { LandingBlocksRenderer } from "@/components/LandingBlocksRenderer";
 import { Sparkles, ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
+import {
+  getGradientClass,
+  resolveFontFamilyCss,
+  resolveImageFilterStyle,
+  resolveTextEffect,
+  resolveTextTypography,
+} from "@/lib/design-catalog";
 
 interface PublicLandingProps {
   params: Promise<{
@@ -14,6 +22,7 @@ interface PublicLandingProps {
 
 // Generate Dynamic OpenGraph metadata for social sharing
 export async function generateMetadata({ params }: PublicLandingProps): Promise<Metadata> {
+  await ensurePaymentColumns();
   const { slug } = await params;
   const res = await dbClient.execute({
     sql: "SELECT title, bio, avatar_url, is_disabled FROM landing_pages WHERE slug = ?",
@@ -46,6 +55,7 @@ export async function generateMetadata({ params }: PublicLandingProps): Promise<
 }
 
 export default async function PublicLandingPage({ params }: PublicLandingProps) {
+  await ensurePaymentColumns();
   const { slug } = await params;
   const cleanSlug = slug.toLowerCase().trim();
 
@@ -131,7 +141,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     ? JSON.parse(planRes.rows[0].features_json as string)
     : { video_background: false, remove_watermark: false };
 
-  // 3. Fetch Active Links
+  // 3. Fetch Active Links & Content Blocks
   const linksRes = await dbClient.execute({
     sql: "SELECT * FROM links WHERE landing_id = ? AND is_active = 1 ORDER BY position ASC, created_at ASC",
     args: [landingRow.id]
@@ -145,138 +155,28 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     icon: r.icon as string,
     position: Number(r.position),
     is_active: Number(r.is_active),
+    block_type: ((r.block_type as string) || "link") as "link" | "title" | "text",
+    content: (r.content as string) || "",
+    is_adult: Number(r.is_adult || 0),
     created_at: r.created_at as string
   }));
 
-  // Dynamic Button Style Generator
-  const getButtonStyle = () => {
-    const style = themeConfig?.button_style || "rounded";
-    const bg = themeConfig?.button_bg || "#4f46e5";
-    const textCol = themeConfig?.button_text_color || "#ffffff";
+  const fontFamilyCss = resolveFontFamilyCss(themeConfig?.font_family);
+  const titleTypo = resolveTextTypography(themeConfig?.text_style || "normal", true);
+  const titleFx = resolveTextEffect(
+    themeConfig?.text_effect || "none",
+    themeConfig?.text_color,
+    "#ffffff",
+    themeConfig?.text_style || "normal"
+  );
 
-    let radiusClass = "rounded-2xl";
-    if (style === "square") radiusClass = "rounded-none";
-    if (style === "pill") radiusClass = "rounded-full";
-    if (style === "rounded") radiusClass = "rounded-2xl";
-
-    let extraStyles: React.CSSProperties = {
-      backgroundColor: bg,
-      color: textCol,
-    };
-
-    const isMovingLight = style.startsWith("moving_light_");
-
-    if (isMovingLight) {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-      };
-    } else if (style === "outline") {
-      extraStyles = {
-        backgroundColor: "transparent",
-        borderColor: bg,
-        color: bg,
-        borderWidth: "2px",
-      };
-    } else if (style === "glass") {
-      extraStyles = {
-        backgroundColor: "rgba(255, 255, 255, 0.12)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderColor: "rgba(255, 255, 255, 0.25)",
-        color: textCol,
-      };
-    } else if (style === "glow" || style === "cyber_neon") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        boxShadow: `0 0 25px ${bg}90`,
-      };
-    } else if (style === "shadow") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        boxShadow: "0 10px 30px -5px rgba(0, 0, 0, 0.6)",
-      };
-    } else if (style === "neumorphism") {
-      extraStyles = {
-        backgroundColor: "#1e293b",
-        color: textCol,
-        boxShadow: "6px 6px 16px rgba(0,0,0,0.6), -6px -6px 16px rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.05)"
-      };
-    } else if (style === "gradient_border") {
-      extraStyles = {
-        background: `linear-gradient(#0f172a, #0f172a) padding-box, linear-gradient(to right, ${bg}, #ec4899) border-box`,
-        border: "2px solid transparent",
-        color: textCol,
-      };
-    } else if (style === "metallic") {
-      extraStyles = {
-        background: "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #cbd5e1 100%)",
-        color: "#0f172a",
-        boxShadow: "0 4px 20px rgba(255, 255, 255, 0.2)",
-        fontWeight: "bold",
-      };
-    } else if (style === "neon") {
-      extraStyles = {
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: bg,
-        borderWidth: "2px",
-        color: bg,
-        boxShadow: `0 0 20px ${bg}80, inset 0 0 10px ${bg}40`,
-      };
-    } else if (style === "floating_3d") {
-      extraStyles = {
-        backgroundColor: bg,
-        color: textCol,
-        borderBottom: "4px solid rgba(0,0,0,0.4)",
-        borderRight: "2px solid rgba(0,0,0,0.2)",
-        boxShadow: "0 8px 25px rgba(0,0,0,0.5)",
-      };
-    } else if (style === "underline") {
-      extraStyles = {
-        backgroundColor: "transparent",
-        borderColor: bg,
-        borderBottomWidth: "2px",
-        borderRadius: "0px",
-        color: textCol,
-      };
-    }
-
-    return { radiusClass, extraStyles, styleKey: style, isMovingLight };
-  };
-
-  const { radiusClass, extraStyles, styleKey, isMovingLight } = getButtonStyle();
-
-  // Text formatting & font style
-  const getTextStyleClasses = () => {
-    const textStyle = themeConfig?.text_style || "normal";
-    let styleClass = "";
-    if (textStyle === "bold") styleClass = "font-extrabold";
-    if (textStyle === "italic") styleClass = "italic";
-    if (textStyle === "bold_italic") styleClass = "font-extrabold italic";
-
-    const effect = themeConfig?.text_effect || "none";
-    let effectClass = "";
-    if (effect === "glow") effectClass = "drop-shadow-[0_0_15px_rgba(56,189,248,0.9)] [text-shadow:0_0_12px_rgba(56,189,248,0.8),0_0_25px_rgba(168,85,247,0.6)]";
-    if (effect === "shadow_3d" || effect === "shadow") effectClass = "[text-shadow:2px_2px_0px_#000,4px_4px_0px_rgba(0,0,0,0.6)]";
-    if (effect === "gradient_text" || effect === "gradient") effectClass = "bg-gradient-to-r from-cyan-400 via-pink-500 to-amber-400 bg-clip-text text-transparent font-black";
-    if (effect === "neon_flicker") effectClass = "text-neon-flicker font-black";
-
-    return `${styleClass} ${effectClass}`;
-  };
-
-  const isGradientText = themeConfig?.text_effect === "gradient_text" || themeConfig?.text_effect === "gradient";
-
-  const getTextStyleObject = (defaultColor: string): React.CSSProperties => {
-    if (isGradientText) {
-      return { WebkitTextFillColor: "transparent", color: "transparent" };
-    }
-    return { color: themeConfig?.text_color || defaultColor };
-  };
-
-  const fontFamily = themeConfig?.font_family || "Inter";
+  const bioTypo = resolveTextTypography(themeConfig?.text_style || "normal", false);
+  const bioFx = resolveTextEffect(
+    themeConfig?.text_effect || "none",
+    themeConfig?.text_color,
+    "#e2e8f0",
+    themeConfig?.text_style || "normal"
+  );
 
   const backgroundType = landingRow.background_type as string;
   const backgroundUrl = landingRow.background_url as string;
@@ -302,13 +202,11 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
     }
 
     if (backgroundType === "gradient") {
-      if (backgroundUrl && backgroundUrl.startsWith("anim_")) {
-        const animName = backgroundUrl.replace("anim_", "");
-        return (
-          <div className={`fixed inset-0 z-0 bg-anim-${animName}`} />
-        );
-      }
-      if (themeConfig?.gradient_color_start && themeConfig?.gradient_color_end) {
+      if (
+        backgroundUrl?.startsWith("custom:") &&
+        themeConfig?.gradient_color_start &&
+        themeConfig?.gradient_color_end
+      ) {
         return (
           <div
             className="fixed inset-0 z-0"
@@ -318,21 +216,12 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
           />
         );
       }
-      return (
-        <div className={`fixed inset-0 z-0 bg-gradient-to-br ${backgroundUrl || "from-slate-900 via-indigo-950 to-purple-950"}`} />
-      );
+      return <div className={`fixed inset-0 z-0 ${getGradientClass(backgroundUrl)}`} />;
     }
 
     if (backgroundType === "image" && backgroundUrl) {
-      let filterStyle: React.CSSProperties = {};
       const filter = themeConfig?.image_filter || "none";
-
-      if (filter === "darken") filterStyle = { filter: "brightness(0.4)" };
-      else if (filter === "blur") filterStyle = { filter: "blur(8px) scale(1.08)" };
-      else if (filter === "sepia") filterStyle = { filter: "sepia(70%)" };
-      else if (filter === "grayscale") filterStyle = { filter: "grayscale(100%)" };
-      else if (filter === "contrast") filterStyle = { filter: "contrast(140%)" };
-      else if (filter === "hue") filterStyle = { filter: "hue-rotate(90deg)" };
+      const filterStyle = resolveImageFilterStyle(filter);
 
       return (
         <div className="fixed inset-0 z-0 overflow-hidden">
@@ -393,7 +282,7 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
   return (
     <div
       className="min-h-screen text-slate-100 flex flex-col justify-between items-center relative overflow-x-hidden selection:bg-indigo-500 selection:text-white"
-      style={{ fontFamily: `'${fontFamily}', sans-serif` }}
+      style={{ fontFamily: fontFamilyCss }}
     >
       {/* Background */}
       {renderBackground()}
@@ -414,67 +303,36 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
           </div>
 
           {/* Title & Bio */}
-          <h1
-            className={`text-2xl font-black tracking-tight drop-shadow-md mb-2 ${getTextStyleClasses()}`}
-            style={getTextStyleObject("#ffffff")}
-          >
-            {landingRow.title as string}
-          </h1>
+          <div className="mb-2">
+            <h1
+              className={`text-2xl font-black tracking-tight ${titleTypo.className} ${titleFx.className}`}
+              style={{ ...titleTypo.style, ...titleFx.style }}
+            >
+              {landingRow.title as string}
+            </h1>
+          </div>
 
           {landingRow.bio && (
-            <p
-              className={`text-sm leading-relaxed max-w-sm mx-auto mb-4 opacity-90 drop-shadow-sm ${getTextStyleClasses()}`}
-              style={getTextStyleObject("#e2e8f0")}
-            >
-              {landingRow.bio as string}
-            </p>
+            <div className="max-w-sm mx-auto mb-4">
+              <p
+                className={`text-sm leading-relaxed opacity-90 ${bioTypo.className} ${bioFx.className}`}
+                style={{ ...bioTypo.style, ...bioFx.style }}
+              >
+                {landingRow.bio as string}
+              </p>
+            </div>
           )}
 
           {/* Social Bar */}
           {renderSocials()}
 
-          {/* Links List */}
-          <div className="space-y-4 mt-6">
-            {links.map((link) => {
-              if (isMovingLight) {
-                const colorClass = `btn-${styleKey.replace('_', '-')}`;
-                return (
-                  <div key={link.id} className={`btn-moving-light-container ${colorClass} ${radiusClass} w-full`}>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={extraStyles}
-                      className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} relative z-10`}
-                    >
-                      <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                        <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
-                      </div>
-                      <span className="truncate w-full text-center px-2">{link.title}</span>
-                      <div className="w-6 h-6 shrink-0" />
-                    </a>
-                  </div>
-                );
-              }
-
-              return (
-                <a
-                  key={link.id}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={extraStyles}
-                  className={`w-full py-4 px-6 font-bold text-sm flex items-center justify-between transition-all transform hover:-translate-y-1 hover:shadow-2xl active:scale-95 ${radiusClass} border border-white/10`}
-                >
-                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                    <SocialIcon platform={link.icon || "globe"} className="w-5 h-5" />
-                  </div>
-                  <span className="truncate w-full text-center px-2">{link.title}</span>
-                  <div className="w-6 h-6 shrink-0" />
-                </a>
-              );
-            })}
-          </div>
+          {/* Interactive Links, Titles & Text Blocks List (+18 Modal handled inside) */}
+          <LandingBlocksRenderer
+            links={links}
+            themeConfig={themeConfig}
+            compact={false}
+            isPreview={false}
+          />
         </div>
 
         {/* Footer / Branding Watermark */}
