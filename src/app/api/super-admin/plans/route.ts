@@ -3,25 +3,33 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { dbClient } from "@/db";
+import { cacheGetOrSet, cacheInvalidate } from "@/lib/cache";
+
+const PLANS_CACHE_KEY = "plans:all";
 
 // GET all plans with feature matrix
 export async function GET() {
   try {
-    const plansRes = await dbClient.execute({
-      sql: "SELECT * FROM plans ORDER BY price_usd ASC",
-      args: []
+    const plans = await cacheGetOrSet(PLANS_CACHE_KEY, 60_000, async () => {
+      const plansRes = await dbClient.execute({
+        sql: "SELECT * FROM plans ORDER BY price_usd ASC",
+        args: []
+      });
+
+      return plansRes.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        price_usd: Number(row.price_usd),
+        features: JSON.parse(row.features_json as string),
+        is_active: Boolean(row.is_active),
+        updated_at: row.updated_at
+      }));
     });
 
-    const plans = plansRes.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      price_usd: Number(row.price_usd),
-      features: JSON.parse(row.features_json as string),
-      is_active: Boolean(row.is_active),
-      updated_at: row.updated_at
-    }));
-
-    return NextResponse.json({ success: true, plans });
+    return NextResponse.json(
+      { success: true, plans },
+      { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" } }
+    );
   } catch (error: any) {
     console.error("GET plans error:", error);
     return NextResponse.json({ error: error?.message || "Error al obtener planes" }, { status: 500 });
@@ -58,6 +66,9 @@ export async function PUT(req: Request) {
         id
       ]
     });
+
+    cacheInvalidate(PLANS_CACHE_KEY);
+    cacheInvalidate("plans:", true);
 
     return NextResponse.json({ success: true, message: "Matriz de plan actualizada en tiempo real" });
   } catch (error: any) {

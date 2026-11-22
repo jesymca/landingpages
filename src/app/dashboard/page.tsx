@@ -149,6 +149,8 @@ export default function AdminDashboardPage() {
   // Profile Deletion Modal state
   const [isDeleteLandingModalOpen, setIsDeleteLandingModalOpen] = useState(false);
   const [isDeletingLanding, setIsDeletingLanding] = useState(false);
+  const initialLoadDoneRef = React.useRef(false);
+  const billingLoadedRef = React.useRef(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -156,18 +158,61 @@ export default function AdminDashboardPage() {
     }
   }, [status, router]);
 
-  const loadData = async (targetLandingId?: string) => {
+  // Background/deferred loader for billing & payment catalogs (never blocks dashboard entry)
+  const loadBillingData = async (force = false) => {
+    if (billingLoadedRef.current && !force) return;
+    billingLoadedRef.current = true;
     try {
-      setLoading(true);
-      const landingUrl = targetLandingId ? `/api/landing?id=${targetLandingId}` : "/api/landing";
-      const [resLanding, resBcv, resMethods, resBanks, resUserPayments, resDiscounts] = await Promise.all([
-        fetch(landingUrl),
+      const [resBcv, resMethods, resBanks, resUserPayments, resDiscounts] = await Promise.all([
         fetch("/api/bcv"),
         fetch("/api/super-admin/payment-methods"),
         fetch("/api/banks"),
         fetch("/api/payments"),
         fetch("/api/super-admin/discounts")
       ]);
+
+      if (resMethods.ok) {
+        const mData = await resMethods.json();
+        const activeMethods = (mData.methods || []).filter((m: any) => m.is_active);
+        setPaymentMethods(activeMethods);
+        if (activeMethods.length > 0) {
+          setSelectedMethodId((prev) => prev || activeMethods[0].id);
+        }
+      }
+
+      if (resBanks.ok) {
+        const bData = await resBanks.json();
+        setBanks(bData.banks || []);
+      }
+
+      if (resBcv.ok) {
+        const bData = await resBcv.json();
+        if (bData.rate) setBcvRate(bData.rate);
+      }
+
+      if (resUserPayments.ok) {
+        const payData = await resUserPayments.json();
+        setUserPayments(payData.payments || []);
+      }
+
+      if (resDiscounts.ok) {
+        const dData = await resDiscounts.json();
+        if (dData.discounts) setDiscounts(dData.discounts);
+      }
+    } catch (err) {
+      console.error("Error loading billing data:", err);
+      billingLoadedRef.current = false;
+    }
+  };
+
+  const loadData = async (targetLandingId?: string, refreshBilling = false) => {
+    try {
+      // Only show full-screen loader on very first paint
+      if (!initialLoadDoneRef.current) {
+        setLoading(true);
+      }
+      const landingUrl = targetLandingId ? `/api/landing?id=${targetLandingId}` : "/api/landing";
+      const resLanding = await fetch(landingUrl);
 
       if (resLanding.ok) {
         const data = await resLanding.json();
@@ -192,47 +237,30 @@ export default function AdminDashboardPage() {
           setLinks(data.links);
         }
       }
-
-      if (resMethods.ok) {
-        const mData = await resMethods.json();
-        const activeMethods = (mData.methods || []).filter((m: any) => m.is_active);
-        setPaymentMethods(activeMethods);
-        if (activeMethods.length > 0) {
-          setSelectedMethodId(activeMethods[0].id);
-        }
-      }
-
-      if (resBanks.ok) {
-        const bData = await resBanks.json();
-        setBanks(bData.banks || []);
-      }
-
-      if (resBcv.ok) {
-        const bData = await resBcv.json();
-        if (bData.rate) setBcvRate(bData.rate);
-      }
-
-      if (resUserPayments.ok) {
-        const payData = await resUserPayments.json();
-        setUserPayments(payData.payments || []);
-      }
-
-      if (resDiscounts.ok) {
-        const dData = await resDiscounts.json();
-        if (dData.discounts) setDiscounts(dData.discounts);
-      }
+      initialLoadDoneRef.current = true;
     } catch (err) {
       console.error("Error loading dashboard data:", err);
     } finally {
       setLoading(false);
     }
+
+    // Load or refresh billing catalogs asynchronously without blocking the UI
+    if (refreshBilling || !billingLoadedRef.current) {
+      void loadBillingData(refreshBilling);
+    }
   };
 
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && !initialLoadDoneRef.current) {
       loadData();
     }
   }, [status]);
+
+  useEffect(() => {
+    if (activeTab === "plan" && status === "authenticated" && !billingLoadedRef.current) {
+      void loadBillingData();
+    }
+  }, [activeTab, status]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -675,7 +703,7 @@ export default function AdminDashboardPage() {
         setPayerIdNumber("");
         setPaymentNotes("");
         setProofUrl("");
-        loadData();
+        loadData(landingId || undefined, true);
       }
     } catch (err) {
       showToast("❌ Error al procesar el pago");
@@ -700,7 +728,7 @@ export default function AdminDashboardPage() {
       } else {
         showToast(`🎉 ¡Éxito! ${data.message}`);
         setTicketCode("");
-        loadData(); // Reload plan data
+        loadData(landingId || undefined, true); // Reload plan data
       }
     } catch (err) {
       showToast("❌ Error al canjear ticket");
@@ -810,6 +838,16 @@ export default function AdminDashboardPage() {
               <span>Ver Página</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
+
+            {session?.user?.role === "SUPER_ADMIN" && (
+              <Link
+                href="/super-admin"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-bold text-amber-300 transition-all"
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>Super Admin</span>
+              </Link>
+            )}
 
             <button
               onClick={() => signOut()}

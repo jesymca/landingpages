@@ -2,25 +2,29 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { dbClient } from "@/db";
+import { cacheGetOrSet, cacheInvalidate } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const showAll = searchParams.get("all") === "true";
 
-    const session = await getServerSession(authOptions);
-    const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+    const session = showAll ? null : await getServerSession(authOptions);
+    const includeAll = showAll || session?.user?.role === "SUPER_ADMIN";
+    const cacheKey = includeAll ? "banks:all" : "banks:active";
 
-    const sql = (showAll || isSuperAdmin)
-      ? "SELECT code, name, is_active FROM banks ORDER BY name ASC"
-      : "SELECT code, name, is_active FROM banks WHERE is_active = 1 ORDER BY name ASC";
-
-    const res = await dbClient.execute({ sql, args: [] });
-
-    return NextResponse.json({
-      success: true,
-      banks: res.rows
+    const banks = await cacheGetOrSet(cacheKey, 5 * 60 * 1000, async () => {
+      const sql = includeAll
+        ? "SELECT code, name, is_active FROM banks ORDER BY name ASC"
+        : "SELECT code, name, is_active FROM banks WHERE is_active = 1 ORDER BY name ASC";
+      const res = await dbClient.execute({ sql, args: [] });
+      return res.rows;
     });
+
+    return NextResponse.json(
+      { success: true, banks },
+      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } }
+    );
   } catch (error: any) {
     console.error("GET banks error:", error);
     return NextResponse.json({ error: error?.message || "Error al obtener bancos" }, { status: 500 });
@@ -46,6 +50,7 @@ export async function POST(req: Request) {
       args: [code.trim(), name.trim()]
     });
 
+    cacheInvalidate("banks:", true);
     return NextResponse.json({ success: true, message: "Banco agregado o actualizado correctamente." });
   } catch (error: any) {
     console.error("POST bank error:", error);
@@ -82,6 +87,7 @@ export async function PUT(req: Request) {
       });
     }
 
+    cacheInvalidate("banks:", true);
     return NextResponse.json({ success: true, message: "Banco actualizado con éxito" });
   } catch (error: any) {
     console.error("PUT bank error:", error);
@@ -108,6 +114,7 @@ export async function DELETE(req: Request) {
       args: [code]
     });
 
+    cacheInvalidate("banks:", true);
     return NextResponse.json({ success: true, message: "Banco eliminado correctamente." });
   } catch (error: any) {
     console.error("DELETE bank error:", error);

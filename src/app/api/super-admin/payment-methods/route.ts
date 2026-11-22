@@ -3,33 +3,41 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { dbClient } from "@/db";
+import { cacheGetOrSet, cacheInvalidate } from "@/lib/cache";
 import crypto from "crypto";
+
+const PAYMENT_METHODS_CACHE_KEY = "payment_methods:all";
 
 // GET payment methods (Public for selection or Super Admin for management)
 export async function GET() {
   try {
-    const res = await dbClient.execute({
-      sql: "SELECT * FROM payment_methods ORDER BY created_at ASC",
-      args: []
+    const methods = await cacheGetOrSet(PAYMENT_METHODS_CACHE_KEY, 2 * 60 * 1000, async () => {
+      const res = await dbClient.execute({
+        sql: "SELECT * FROM payment_methods ORDER BY created_at ASC",
+        args: []
+      });
+
+      return res.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        currency: row.currency,
+        type: row.type,
+        bank_code: row.bank_code,
+        bank_name: row.bank_name,
+        account_number: row.account_number,
+        id_number: row.id_number,
+        phone_number: row.phone_number,
+        email: row.email,
+        pay_id: row.pay_id,
+        instructions: row.instructions,
+        is_active: Boolean(row.is_active)
+      }));
     });
 
-    const methods = res.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      currency: row.currency,
-      type: row.type,
-      bank_code: row.bank_code,
-      bank_name: row.bank_name,
-      account_number: row.account_number,
-      id_number: row.id_number,
-      phone_number: row.phone_number,
-      email: row.email,
-      pay_id: row.pay_id,
-      instructions: row.instructions,
-      is_active: Boolean(row.is_active)
-    }));
-
-    return NextResponse.json({ success: true, methods });
+    return NextResponse.json(
+      { success: true, methods },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } }
+    );
   } catch (error: any) {
     console.error("GET payment methods error:", error);
     return NextResponse.json({ error: error?.message || "Error al obtener métodos de pago" }, { status: 500 });
@@ -84,6 +92,7 @@ export async function POST(req: Request) {
       ]
     });
 
+    cacheInvalidate(PAYMENT_METHODS_CACHE_KEY);
     return NextResponse.json({ success: true, message: "Método de pago creado con éxito", id });
   } catch (error: any) {
     console.error("POST payment method error:", error);
@@ -152,6 +161,7 @@ export async function PUT(req: Request) {
       ]
     });
 
+    cacheInvalidate(PAYMENT_METHODS_CACHE_KEY);
     return NextResponse.json({ success: true, message: "Método de pago actualizado" });
   } catch (error: any) {
     console.error("PUT payment method error:", error);
@@ -179,6 +189,7 @@ export async function DELETE(req: Request) {
       args: [id]
     });
 
+    cacheInvalidate(PAYMENT_METHODS_CACHE_KEY);
     return NextResponse.json({ success: true, message: "Método de pago eliminado" });
   } catch (error: any) {
     console.error("DELETE payment method error:", error);

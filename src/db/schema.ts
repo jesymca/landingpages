@@ -159,6 +159,56 @@ export interface Ticket {
   used_at?: string;
 }
 
+export type ExternalApiScope =
+  | 'profiles:create'
+  | 'profiles:bulk'
+  | 'profiles:read'
+  | 'profiles:update'
+  | 'profiles:delete';
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  description?: string;
+  key_prefix: string;
+  key_hash?: string;
+  scopes: ExternalApiScope[];
+  default_plan_id: 'GRATIS' | 'PAGO';
+  allow_plan_override: number;
+  max_bulk_size: number;
+  rate_limit_per_min: number;
+  is_active: number;
+  requests_count: number;
+  profiles_created_count: number;
+  last_used_at?: string | null;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface ApiLogRecord {
+  id: string;
+  api_key_id?: string | null;
+  api_key_name?: string | null;
+  endpoint: string;
+  method: string;
+  status_code: number;
+  items_requested: number;
+  items_succeeded: number;
+  items_failed: number;
+  duration_ms: number;
+  ip_address?: string | null;
+  error_summary?: string | null;
+  created_at: string;
+}
+
+export interface ExternalApiConfig {
+  enabled: boolean;
+  default_plan_id: 'GRATIS' | 'PAGO';
+  allow_auto_user_creation: boolean;
+  default_max_bulk_size: number;
+  cors_allowed_origins: string;
+}
+
 // SQL Table Initialization statements
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS plans (
@@ -280,5 +330,40 @@ CREATE TABLE IF NOT EXISTS tickets (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   used_at DATETIME,
   FOREIGN KEY (used_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT UNIQUE NOT NULL,
+  scopes_json TEXT NOT NULL DEFAULT '["profiles:create","profiles:bulk","profiles:read","profiles:update"]',
+  default_plan_id TEXT NOT NULL DEFAULT 'GRATIS',
+  allow_plan_override INTEGER NOT NULL DEFAULT 0,
+  max_bulk_size INTEGER NOT NULL DEFAULT 100,
+  rate_limit_per_min INTEGER NOT NULL DEFAULT 60,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  requests_count INTEGER NOT NULL DEFAULT 0,
+  profiles_created_count INTEGER NOT NULL DEFAULT 0,
+  last_used_at DATETIME,
+  created_by TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS api_logs (
+  id TEXT PRIMARY KEY,
+  api_key_id TEXT,
+  api_key_name TEXT,
+  endpoint TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  items_requested INTEGER NOT NULL DEFAULT 1,
+  items_succeeded INTEGER NOT NULL DEFAULT 0,
+  items_failed INTEGER NOT NULL DEFAULT 0,
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  ip_address TEXT,
+  error_summary TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 `;

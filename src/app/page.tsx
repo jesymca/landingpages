@@ -26,30 +26,28 @@ export default function CommercialLandingPage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [plansRes, bcvRes] = await Promise.all([
-          fetch("/api/super-admin/plans"),
-          fetch("/api/bcv")
-        ]);
+    let active = true;
+    // Independent non-blocking fetches so plans render immediately without waiting for external BCV API
+    fetch("/api/super-admin/plans")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.plans) setPlans(data.plans);
+      })
+      .catch((err) => console.error("Error fetching plans:", err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-        if (plansRes.ok) {
-          const data = await plansRes.json();
-          if (data.plans) setPlans(data.plans);
-        }
+    fetch("/api/bcv")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((bData) => {
+        if (active && bData?.rate) setBcvRate(bData.rate);
+      })
+      .catch((err) => console.error("Error fetching BCV rate:", err));
 
-        if (bcvRes.ok) {
-          const bData = await bcvRes.json();
-          if (bData.rate) setBcvRate(bData.rate);
-        }
-      } catch (err) {
-        console.error("Error fetching homepage data:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

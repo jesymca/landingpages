@@ -2,23 +2,32 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { dbClient, ensurePaymentColumns } from "@/db";
+import { cacheGetOrSet } from "@/lib/cache";
 
 // GET user landing page and links
 export async function GET(req: Request) {
   try {
-    await ensurePaymentColumns();
-    const session = await getServerSession(authOptions);
+    const [, session] = await Promise.all([
+      ensurePaymentColumns(),
+      getServerSession(authOptions),
+    ]);
     if (!session?.user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
     const userId = session.user.id;
 
-    // Fetch user and plan
-    const userRes = await dbClient.execute({
-      sql: "SELECT * FROM users WHERE id = ?",
-      args: [userId]
-    });
+    // Fetch user and their landing pages in parallel (eliminates sequential RTT)
+    const [userRes, landingsRes] = await Promise.all([
+      dbClient.execute({
+        sql: "SELECT * FROM users WHERE id = ?",
+        args: [userId]
+      }),
+      dbClient.execute({
+        sql: "SELECT * FROM landing_pages WHERE user_id = ? ORDER BY created_at ASC",
+        args: [userId]
+      }),
+    ]);
 
     if (userRes.rows.length === 0) {
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
@@ -31,21 +40,18 @@ export async function GET(req: Request) {
     const isProActive = user.plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
     const effectivePlanId = isProActive ? 'PAGO' : 'GRATIS';
 
-    // Fetch plan features for effective plan
-    const planRes = await dbClient.execute({
-      sql: "SELECT * FROM plans WHERE id = ?",
-      args: [effectivePlanId]
-    });
-
-    const plan = planRes.rows[0] ? {
-      ...planRes.rows[0],
-      features_json: JSON.parse(planRes.rows[0].features_json as string)
-    } : null;
-
-    // Fetch landing pages
-    let landingsRes = await dbClient.execute({
-      sql: "SELECT * FROM landing_pages WHERE user_id = ? ORDER BY created_at ASC",
-      args: [userId]
+    // Cached plan features lookup (invalidated whenever super-admin edits plans)
+    const planPromise = cacheGetOrSet(`plans:single:${effectivePlanId}`, 60_000, async () => {
+      const planRes = await dbClient.execute({
+        sql: "SELECT * FROM plans WHERE id = ?",
+        args: [effectivePlanId]
+      });
+      return planRes.rows[0]
+        ? {
+            ...planRes.rows[0],
+            features_json: JSON.parse(planRes.rows[0].features_json as string)
+          }
+        : null;
     });
 
     let landings: any[] = [];
@@ -100,11 +106,14 @@ export async function GET(req: Request) {
       }
     }
 
-    // Fetch links for the ACTIVE landing page
-    const linksRes = await dbClient.execute({
-      sql: "SELECT * FROM links WHERE landing_id = ? ORDER BY position ASC, created_at ASC",
-      args: [landing.id]
-    });
+    // Fetch plan (from cache or DB) and active landing links in parallel
+    const [plan, linksRes] = await Promise.all([
+      planPromise,
+      dbClient.execute({
+        sql: "SELECT * FROM links WHERE landing_id = ? ORDER BY position ASC, created_at ASC",
+        args: [landing.id]
+      }),
+    ]);
 
     const links = linksRes.rows.map(row => ({
       id: row.id,

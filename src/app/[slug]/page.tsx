@@ -1,6 +1,7 @@
-import React from "react";
+import React, { cache } from "react";
 import { notFound } from "next/navigation";
 import { dbClient, ensurePaymentColumns } from "@/db";
+import { cacheGetOrSet } from "@/lib/cache";
 import { ThemeConfig, LinkItem } from "@/db/schema";
 import { SocialIcon } from "@/components/SocialIcons";
 import { LandingBlocksRenderer } from "@/components/LandingBlocksRenderer";
@@ -20,22 +21,31 @@ interface PublicLandingProps {
   }>;
 }
 
+// Deduplicate landing + owner lookup across generateMetadata and PublicLandingPage in the same request
+const getLandingWithOwner = cache(async (rawSlug: string) => {
+  await ensurePaymentColumns();
+  const cleanSlug = rawSlug.toLowerCase().trim();
+  const res = await dbClient.execute({
+    sql: `SELECT lp.*, u.plan_id as owner_plan_id, u.subscription_expires_at as owner_expires_at
+          FROM landing_pages lp
+          LEFT JOIN users u ON lp.user_id = u.id
+          WHERE lp.slug = ?`,
+    args: [cleanSlug]
+  });
+  return res.rows[0] || null;
+});
+
 // Generate Dynamic OpenGraph metadata for social sharing
 export async function generateMetadata({ params }: PublicLandingProps): Promise<Metadata> {
-  await ensurePaymentColumns();
   const { slug } = await params;
-  const res = await dbClient.execute({
-    sql: "SELECT title, bio, avatar_url, is_disabled FROM landing_pages WHERE slug = ?",
-    args: [slug.toLowerCase().trim()]
-  });
+  const landing = await getLandingWithOwner(slug);
 
-  if (res.rows.length === 0) {
+  if (!landing) {
     return {
       title: "Página no encontrada | LinkBio VE",
     };
   }
 
-  const landing = res.rows[0];
   if (landing.is_disabled) {
     return {
       title: "Perfil Deshabilitado | LinkBio VE",
@@ -55,21 +65,14 @@ export async function generateMetadata({ params }: PublicLandingProps): Promise<
 }
 
 export default async function PublicLandingPage({ params }: PublicLandingProps) {
-  await ensurePaymentColumns();
   const { slug } = await params;
-  const cleanSlug = slug.toLowerCase().trim();
 
-  // 1. Fetch Landing Page
-  const landingRes = await dbClient.execute({
-    sql: "SELECT * FROM landing_pages WHERE slug = ?",
-    args: [cleanSlug]
-  });
+  // 1. Fetch Landing Page + Owner info (deduplicated with generateMetadata)
+  const landingRow = await getLandingWithOwner(slug);
 
-  if (landingRes.rows.length === 0) {
+  if (!landingRow) {
     notFound();
   }
-
-  const landingRow = landingRes.rows[0];
 
   // If disabled by admin, render warning screen with justification
   if (landingRow.is_disabled === 1 || Boolean(landingRow.is_disabled)) {
@@ -121,31 +124,26 @@ export default async function PublicLandingPage({ params }: PublicLandingProps) 
   }
   const themeConfig: ThemeConfig = JSON.parse(landingRow.theme_config_json as string);
 
-  // 2. Fetch User & User Plan Features
-  const userRes = await dbClient.execute({
-    sql: "SELECT plan_id, subscription_expires_at FROM users WHERE id = ?",
-    args: [landingRow.user_id]
-  });
-
-  const userRow = userRes.rows[0];
-  const expiresAtMs = userRow?.subscription_expires_at ? new Date(userRow.subscription_expires_at as string).getTime() : null;
-  const isProActive = userRow?.plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
+  // 2. Determine User Plan Features (cached) & Fetch Active Links in parallel
+  const expiresAtMs = landingRow.owner_expires_at ? new Date(landingRow.owner_expires_at as string).getTime() : null;
+  const isProActive = landingRow.owner_plan_id === 'PAGO' && (expiresAtMs === null || expiresAtMs > Date.now());
   const effectivePlanId = isProActive ? 'PAGO' : 'GRATIS';
 
-  const planRes = await dbClient.execute({
-    sql: "SELECT features_json FROM plans WHERE id = ?",
-    args: [effectivePlanId]
-  });
-
-  const features = planRes.rows[0]
-    ? JSON.parse(planRes.rows[0].features_json as string)
-    : { video_background: false, remove_watermark: false };
-
-  // 3. Fetch Active Links & Content Blocks
-  const linksRes = await dbClient.execute({
-    sql: "SELECT * FROM links WHERE landing_id = ? AND is_active = 1 ORDER BY position ASC, created_at ASC",
-    args: [landingRow.id]
-  });
+  const [features, linksRes] = await Promise.all([
+    cacheGetOrSet(`plans:features:${effectivePlanId}`, 60_000, async () => {
+      const planRes = await dbClient.execute({
+        sql: "SELECT features_json FROM plans WHERE id = ?",
+        args: [effectivePlanId]
+      });
+      return planRes.rows[0]
+        ? JSON.parse(planRes.rows[0].features_json as string)
+        : { video_background: false, remove_watermark: false };
+    }),
+    dbClient.execute({
+      sql: "SELECT * FROM links WHERE landing_id = ? AND is_active = 1 ORDER BY position ASC, created_at ASC",
+      args: [landingRow.id]
+    }),
+  ]);
 
   const links: LinkItem[] = linksRes.rows.map((r) => ({
     id: r.id as string,

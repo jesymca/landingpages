@@ -1,6 +1,6 @@
 # AI_CHANGELOG.md — Registro Cronológico de Ediciones (Últimas Intervenciones)
 
-> **Regla para IAs:** Lee las primeras entradas para conocer los cambios más recientes sin releer todo el repositorio. Al terminar **cada** intervención, agrega una nueva entrada inmediatamente debajo del marcador `<!-- NUEVAS INTERVENCIONES AQUÍ -->` siguiendo la plantilla.
+> **Regla para IAs:** Lee las primeras entradas para conocer los cambios más recientes sin releer todo el repositorio. Al terminar **cada** intervención, agrega una nueva entrada inmediatamente debajo del marcador `<!-- NUEVAS INTERVENCIONES AQUÍ -->` siguiendo la plantilla (o ejecuta `npm run ai:log`).
 
 ## Plantilla Obligatoria de Registro
 ```markdown
@@ -13,6 +13,16 @@
 ```
 
 <!-- NUEVAS INTERVENCIONES AQUÍ -->
+
+### [2026-11-22] — Herramientas Memoria IA, Super Admin Multi-Ruta, API Externa Masiva v1 y Optimización de Navegación
+- **Solicitud**: Crear `agent.md`/`recursos.md`/`vitacora.md` y CLI `ai:*`, separar `/super-admin` en rutas dedicadas, habilitar zona API Externa masiva + prompt IA, y eliminar retardos de navegación.
+- **Archivos modificados/creados**:
+  - `agent.md`, `recursos.md`, `vitacora.md`, `API_INTEGRATION_PROMPT.md`, `.ai-state.json`, `scripts/ai-memory.mjs`, `package.json`, `AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `README.md`, `AI_CONTEXT.md`: Sistema de memoria por fases y herramientas CLI (`npm run ai:status`, `ai:snapshot`, `ai:phase`, `ai:log`).
+  - `src/lib/cache.ts`, `src/lib/auth.ts`, `src/types/next-auth.d.ts`, `src/app/providers.tsx`, `src/db/index.ts`, `src/app/api/bcv/route.ts`, `src/app/api/landing/route.ts`, `src/app/[slug]/page.tsx`, `src/app/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/api/banks/route.ts`, `src/app/api/super-admin/{plans,discounts,payment-methods}/route.ts`: Eliminación de consulta DB por petición en `callbacks.session`, caché TTL en memoria, timeout 2.5s en BCV, queries paralelas, deduplicación SSR con `React.cache()` y carga diferida de catálogos de pago en dashboard.
+  - `src/db/schema.ts`, `src/lib/external-api.ts`, `src/lib/external-api-prompt.ts`, `src/app/api/super-admin/api-keys/route.ts`, `src/app/api/v1/{health,profiles,profiles/bulk,profiles/[slug]}/route.ts`: Motor completo de API Externa v1 con API Keys SHA-256, scopes, rate-limit, CORS, logs, creación individual y masiva automatizada (`dry_run`, auto-creación de usuarios y contraseñas, deduplicación de slugs).
+  - `src/app/api/super-admin/summary/route.ts`, `src/components/super-admin/SuperAdminShell.tsx`, `src/app/super-admin/{layout,loading,page}.tsx`, `src/app/super-admin/{pagos,usuarios,perfiles,metodos_pagos,matriz_planes,bancos,tickets,api_externa}/page.tsx`: Navegación multi-ruta independiente en `/super-admin/*` con sidebar persistente, KPIs compartidos y Zona API Externa con Playground y generador de Prompt IA.
+- **DB / API**: Tablas `api_keys` y `api_logs` + índices SQLite en `ensurePaymentColumns()`; nuevos endpoints `/api/super-admin/summary`, `/api/super-admin/api-keys`, `/api/v1/health`, `/api/v1/profiles`, `/api/v1/profiles/bulk`, `/api/v1/profiles/[slug]`.
+- **Validación**: `npx tsc --noEmit` -> exit 0; `npm run build` -> exit 0 (22/22 routes).
 
 ### [2026-11-16] — Reordenamiento Drag & Drop, Bloques Título/Texto, Enlaces +18, Memoria AI `.md` y Catálogo Visual PRO Ampliado
 - **Solicitud**: Drag-and-drop para reordenar enlaces en dashboard; crear bloques `Añadir Título` y `Añadir Texto` reordenables; toggle de contenido `+18` con advertencia al visitante; documentación `.md` con instrucción de memoria post-intervención; +20 gradientes móviles PRO con muestra en botón; +20 botones PRO animados/iluminados con muestra en botón + verificación de existentes; 20 estilos tipográficos PRO; vista previa real en selector Google Fonts; +10 efectos visuales de texto PRO animados/iluminados con vista previa en vivo.

@@ -1,0 +1,221 @@
+{
+  "project": "LinkBio VE (landingpages)",
+  "current_phase": {
+    "name": "Fase 4 — Memoria IA, Super Admin Multi-Ruta, API Externa Masiva v1 y Optimización de Velocidad",
+    "status": "Completada",
+    "progress": "100%",
+    "next_step": "Fase 5 — Analítica de clics por enlace, Webhooks salientes API y Dominios Personalizados",
+    "updated_at": "2026-11-22"
+  },
+  "last_intervention": {
+    "date": "2026-11-22",
+    "title": "Herramientas Memoria IA, Super Admin Multi-Ruta, API Externa Masiva v1 y Optimización de Navegación",
+    "summary": "Crear agent.md/recursos.md/vitacora.md y CLI ai:*, separar /super-admin en rutas dedicadas, habilitar zona API Externa masiva + prompt IA, y eliminar retardos de navegación",
+    "files": [
+      "agent.md",
+      "recursos.md",
+      "vitacora.md",
+      "API_INTEGRATION_PROMPT.md",
+      "scripts/ai-memory.mjs",
+      "src/lib/cache.ts",
+      "src/lib/auth.ts",
+      "src/lib/external-api.ts",
+      "src/lib/external-api-prompt.ts",
+      "src/db/schema.ts",
+      "src/db/index.ts",
+      "src/app/providers.tsx",
+      "src/app/page.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/[slug]/page.tsx",
+      "src/app/api/bcv/route.ts",
+      "src/app/api/landing/route.ts",
+      "src/app/api/super-admin/summary/route.ts",
+      "src/app/api/super-admin/api-keys/route.ts",
+      "src/app/api/v1/*",
+      "src/components/super-admin/SuperAdminShell.tsx",
+      "src/app/super-admin/**"
+    ],
+    "db": "Tablas api_keys y api_logs + índices SQLite en ensurePaymentColumns(); nuevos endpoints /api/super-admin/summary, /api/super-admin/api-keys, /api/v1/health, /api/v1/profiles, /api/v1/profiles/bulk, /api/v1/profiles/[slug]",
+    "validation": "npx tsc --noEmit -> exit 0; npm run build -> exit 0 (22/22 routes)"
+  },
+  "inventory": {
+    "ui_pages": [
+      {
+        "route": "/[slug]",
+        "file": "src/app/[slug]/page.tsx"
+      },
+      {
+        "route": "/auth/login",
+        "file": "src/app/auth/login/page.tsx"
+      },
+      {
+        "route": "/dashboard",
+        "file": "src/app/dashboard/page.tsx"
+      },
+      {
+        "route": "/",
+        "file": "src/app/page.tsx"
+      },
+      {
+        "route": "/super-admin/api_externa",
+        "file": "src/app/super-admin/api_externa/page.tsx"
+      },
+      {
+        "route": "/super-admin/bancos",
+        "file": "src/app/super-admin/bancos/page.tsx"
+      },
+      {
+        "route": "/super-admin/matriz_planes",
+        "file": "src/app/super-admin/matriz_planes/page.tsx"
+      },
+      {
+        "route": "/super-admin/metodos_pagos",
+        "file": "src/app/super-admin/metodos_pagos/page.tsx"
+      },
+      {
+        "route": "/super-admin",
+        "file": "src/app/super-admin/page.tsx"
+      },
+      {
+        "route": "/super-admin/pagos",
+        "file": "src/app/super-admin/pagos/page.tsx"
+      },
+      {
+        "route": "/super-admin/perfiles",
+        "file": "src/app/super-admin/perfiles/page.tsx"
+      },
+      {
+        "route": "/super-admin/tickets",
+        "file": "src/app/super-admin/tickets/page.tsx"
+      },
+      {
+        "route": "/super-admin/usuarios",
+        "file": "src/app/super-admin/usuarios/page.tsx"
+      }
+    ],
+    "api_routes": [
+      {
+        "route": "/api/auth/[...nextauth]",
+        "file": "src/app/api/auth/[...nextauth]/route.ts"
+      },
+      {
+        "route": "/api/banks",
+        "file": "src/app/api/banks/route.ts"
+      },
+      {
+        "route": "/api/bcv",
+        "file": "src/app/api/bcv/route.ts"
+      },
+      {
+        "route": "/api/debug-users",
+        "file": "src/app/api/debug-users/route.ts"
+      },
+      {
+        "route": "/api/debug",
+        "file": "src/app/api/debug/route.ts"
+      },
+      {
+        "route": "/api/landing",
+        "file": "src/app/api/landing/route.ts"
+      },
+      {
+        "route": "/api/links",
+        "file": "src/app/api/links/route.ts"
+      },
+      {
+        "route": "/api/payments",
+        "file": "src/app/api/payments/route.ts"
+      },
+      {
+        "route": "/api/super-admin/api-keys",
+        "file": "src/app/api/super-admin/api-keys/route.ts"
+      },
+      {
+        "route": "/api/super-admin/discounts",
+        "file": "src/app/api/super-admin/discounts/route.ts"
+      },
+      {
+        "route": "/api/super-admin/landings",
+        "file": "src/app/api/super-admin/landings/route.ts"
+      },
+      {
+        "route": "/api/super-admin/payment-methods",
+        "file": "src/app/api/super-admin/payment-methods/route.ts"
+      },
+      {
+        "route": "/api/super-admin/payments",
+        "file": "src/app/api/super-admin/payments/route.ts"
+      },
+      {
+        "route": "/api/super-admin/plans",
+        "file": "src/app/api/super-admin/plans/route.ts"
+      },
+      {
+        "route": "/api/super-admin/summary",
+        "file": "src/app/api/super-admin/summary/route.ts"
+      },
+      {
+        "route": "/api/super-admin/tickets",
+        "file": "src/app/api/super-admin/tickets/route.ts"
+      },
+      {
+        "route": "/api/super-admin/users",
+        "file": "src/app/api/super-admin/users/route.ts"
+      },
+      {
+        "route": "/api/tickets/redeem",
+        "file": "src/app/api/tickets/redeem/route.ts"
+      },
+      {
+        "route": "/api/upload",
+        "file": "src/app/api/upload/route.ts"
+      },
+      {
+        "route": "/api/v1/health",
+        "file": "src/app/api/v1/health/route.ts"
+      },
+      {
+        "route": "/api/v1/profiles/[slug]",
+        "file": "src/app/api/v1/profiles/[slug]/route.ts"
+      },
+      {
+        "route": "/api/v1/profiles/bulk",
+        "file": "src/app/api/v1/profiles/bulk/route.ts"
+      },
+      {
+        "route": "/api/v1/profiles",
+        "file": "src/app/api/v1/profiles/route.ts"
+      }
+    ],
+    "lib_files": [
+      "src/lib/auth.ts",
+      "src/lib/cache.ts",
+      "src/lib/design-catalog.ts",
+      "src/lib/external-api-prompt.ts",
+      "src/lib/external-api.ts"
+    ],
+    "components": [
+      "src/components/AdultWarningModal.tsx",
+      "src/components/IconCatalog.tsx",
+      "src/components/LandingBlocksRenderer.tsx",
+      "src/components/PhonePreview.tsx",
+      "src/components/SocialIcons.tsx",
+      "src/components/super-admin/SuperAdminShell.tsx"
+    ],
+    "db_tables": [
+      "plans",
+      "users",
+      "landing_pages",
+      "links",
+      "system_settings",
+      "banks",
+      "payment_methods",
+      "payments",
+      "tickets",
+      "api_keys",
+      "api_logs"
+    ],
+    "scanned_at": "2026-11-22T17:12:17.373Z"
+  },
+  "updated_at": "2026-11-22T17:12:18.595Z"
+}

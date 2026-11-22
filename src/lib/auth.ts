@@ -152,13 +152,18 @@ export const authOptions: NextAuthOptions = {
         try {
           if (userEmail) {
             const dbUser = await dbClient.execute({
-              sql: "SELECT id, role, plan_id FROM users WHERE email = ?",
+              sql: `SELECT u.id, u.role, u.plan_id,
+                           (SELECT lp.slug FROM landing_pages lp WHERE lp.user_id = u.id ORDER BY lp.created_at ASC LIMIT 1) as slug
+                    FROM users u WHERE u.email = ?`,
               args: [userEmail]
             });
             if (dbUser.rows.length > 0) {
               token.id = dbUser.rows[0].id as string;
               token.role = dbUser.rows[0].role as string;
               token.plan_id = dbUser.rows[0].plan_id as string;
+              if (dbUser.rows[0].slug) {
+                token.slug = dbUser.rows[0].slug as string;
+              }
             } else {
               token.id = user.id;
             }
@@ -174,28 +179,19 @@ export const authOptions: NextAuthOptions = {
       if (trigger === "update" && session) {
         if (session.role) token.role = session.role;
         if (session.plan_id) token.plan_id = session.plan_id;
+        if (session.slug) token.slug = session.slug;
       }
 
       return token;
     },
     async session({ session, token }) {
+      // Zero DB queries here: read directly from signed JWT for instant navigation and fast API auth
       if (session.user) {
         session.user.id = (token.id as string) || "";
         session.user.role = (token.role as string) || "ADMIN";
         session.user.plan_id = (token.plan_id as string) || "GRATIS";
-
-        try {
-          if (token.id) {
-            const dbLanding = await dbClient.execute({
-              sql: "SELECT slug FROM landing_pages WHERE user_id = ?",
-              args: [token.id as string]
-            });
-            if (dbLanding.rows.length > 0) {
-              session.user.slug = dbLanding.rows[0].slug as string;
-            }
-          }
-        } catch (e: any) {
-          console.error("[Auth] Error fetching slug in session callback:", e?.message || e);
+        if (token.slug) {
+          session.user.slug = token.slug as string;
         }
       }
       return session;

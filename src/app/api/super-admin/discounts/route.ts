@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { dbClient } from "@/db";
+import { cacheGetOrSet, cacheInvalidate } from "@/lib/cache";
+
+const DISCOUNTS_CACHE_KEY = "settings:discounts";
 
 const DEFAULT_DISCOUNTS = {
   "1": 0,
@@ -15,24 +18,30 @@ const DEFAULT_DISCOUNTS = {
 // GET discounts (Public for user dashboard calculation & Super Admin management)
 export async function GET() {
   try {
-    const res = await dbClient.execute({
-      sql: "SELECT value_json FROM system_settings WHERE key = 'multi_month_discounts'",
-      args: []
+    const discounts = await cacheGetOrSet(DISCOUNTS_CACHE_KEY, 2 * 60 * 1000, async () => {
+      const res = await dbClient.execute({
+        sql: "SELECT value_json FROM system_settings WHERE key = 'multi_month_discounts'",
+        args: []
+      });
+
+      let parsedDiscounts = DEFAULT_DISCOUNTS;
+      if (res.rows.length > 0 && res.rows[0].value_json) {
+        try {
+          const parsed = typeof res.rows[0].value_json === "string"
+            ? JSON.parse(res.rows[0].value_json as string)
+            : res.rows[0].value_json;
+          parsedDiscounts = { ...DEFAULT_DISCOUNTS, ...parsed };
+        } catch (e) {
+          console.error("Error parsing discounts json:", e);
+        }
+      }
+      return parsedDiscounts;
     });
 
-    let discounts = DEFAULT_DISCOUNTS;
-    if (res.rows.length > 0 && res.rows[0].value_json) {
-      try {
-        const parsed = typeof res.rows[0].value_json === "string"
-          ? JSON.parse(res.rows[0].value_json as string)
-          : res.rows[0].value_json;
-        discounts = { ...DEFAULT_DISCOUNTS, ...parsed };
-      } catch (e) {
-        console.error("Error parsing discounts json:", e);
-      }
-    }
-
-    return NextResponse.json({ success: true, discounts });
+    return NextResponse.json(
+      { success: true, discounts },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } }
+    );
   } catch (error: any) {
     console.error("GET discounts error:", error);
     return NextResponse.json({ success: true, discounts: DEFAULT_DISCOUNTS });
@@ -61,6 +70,7 @@ export async function PUT(req: Request) {
       args: [jsonStr]
     });
 
+    cacheInvalidate(DISCOUNTS_CACHE_KEY);
     return NextResponse.json({ success: true, message: "Descuentos multimes actualizados correctamente" });
   } catch (error: any) {
     console.error("PUT discounts error:", error);

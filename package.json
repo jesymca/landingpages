@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "ai:status": "node scripts/ai-memory.mjs status",
+    "ai:snapshot": "node scripts/ai-memory.mjs snapshot",
+    "ai:phase": "node scripts/ai-memory.mjs phase",
+    "ai:log": "node scripts/ai-memory.mjs log"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1136.0",
